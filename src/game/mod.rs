@@ -1,6 +1,8 @@
+mod enemy;
 mod events;
 mod player;
 
+use enemy::EnemyPlugin;
 use events::{GameOverEvent, PlayerTakeDamageEvent};
 use player::components::Player;
 use player::PlayerPlugin;
@@ -9,13 +11,10 @@ use bevy::{prelude::*, window::PrimaryWindow};
 use rand::prelude::*;
 
 const PICKUP_SPEED: f32 = 100.0;
-const ENEMY_SPEED: f32 = 85.0;
 
 const PICKUP_SPAWN_PERIOD: f32 = 1.0;
-const ENEMY_SPAWN_PERIOD: f32 = 3.0;
 
 const PICKUP_SPRITE_SIZE: f32 = 64.0;
-const ENEMY_SPRITE_SIZE: f32 = 64.0;
 
 const FUEL_PICKUP_RESTORE: f32 = 25.0;
 const HEALTH_PICKUP_RESTORE: usize = 1;
@@ -27,12 +26,12 @@ pub struct GamePlugin;
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(PlayerPlugin)
+            .add_plugin(EnemyPlugin)
             .add_state::<GameState>()
             .add_event::<PlayerTakeDamageEvent>()
             .add_event::<GameOverEvent>()
             .init_resource::<GameInfo>()
             .init_resource::<PickupSpawnTimer>()
-            .init_resource::<EnemySpawnTimer>()
             .add_startup_system(spawn_camera)
             .add_systems((
                 get_cursor_world_coordinates,
@@ -40,9 +39,6 @@ impl Plugin for GamePlugin {
                 move_pickups_vertically,
                 tick_pickup_spawn_timer,
                 despawn_pickups,
-                tick_enemy_spawn_timer,
-                spawn_enemies_over_timer,
-                move_enemies_to_arena,
                 handle_game_over_event,
             ));
     }
@@ -74,25 +70,6 @@ impl Default for PickupSpawnTimer {
     }
 }
 
-#[derive(Resource)]
-pub struct EnemySpawnTimer {
-    timer: Timer,
-}
-
-impl Default for EnemySpawnTimer {
-    fn default() -> Self {
-        EnemySpawnTimer {
-            timer: Timer::from_seconds(ENEMY_SPAWN_PERIOD, TimerMode::Repeating),
-        }
-    }
-}
-
-#[derive(Component, Default)]
-pub struct Enemy {
-    direction: Vec3,
-    destination: Vec3,
-}
-
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -119,46 +96,6 @@ pub fn spawn_camera(mut commands: Commands, window_query: Query<&Window, With<Pr
         },
         MainCamera {},
     ));
-}
-
-// Spawn enemies outside the bottom border of the screen
-// And set them random direction in direction from the bottom to the arena.
-pub fn spawn_enemies_over_timer(
-    mut commands: Commands,
-    window_query: Query<&Window, With<PrimaryWindow>>,
-    asset_server: Res<AssetServer>,
-    enemy_timer: Res<EnemySpawnTimer>,
-) {
-    if enemy_timer.timer.just_finished() {
-        let primary_window = window_query.get_single().unwrap();
-        let enemy_radius = ENEMY_SPRITE_SIZE / 2.0;
-
-        let enemy_starting_position = Vec3::new(
-            random::<f32>() * primary_window.width(),
-            0.0 - ENEMY_SPRITE_SIZE,
-            0.0,
-        );
-        let enemy_final_position = Vec3::new(
-            random::<f32>() * primary_window.width() - enemy_radius,
-            0.0 + ENEMY_SPRITE_SIZE + random::<f32>() * ENEMY_SPRITE_SIZE,
-            0.0,
-        );
-        let enemy_direction = (enemy_final_position - enemy_starting_position).normalize();
-
-        commands.spawn((
-            SpriteBundle {
-                transform: Transform::from_translation(enemy_starting_position),
-                texture: asset_server.load("sprites/enemy.png"),
-                ..default()
-            },
-            Enemy {
-                direction: enemy_direction,
-                destination: enemy_final_position,
-            },
-        ));
-
-        println!("Enemy has spawned, destination: {}!", enemy_final_position);
-    }
 }
 
 // Function that spawns randowm pickups over time at the y = 0, and random x.
@@ -230,18 +167,6 @@ pub fn move_pickups_vertically(
     }
 }
 
-// Before playing their AI, enemies will first slowly move to the arena outside of the screen.
-pub fn move_enemies_to_arena(mut enemies_query: Query<(&mut Transform, &Enemy)>, time: Res<Time>) {
-    for (mut enemy_transform, enemy) in enemies_query.iter_mut() {
-        // Move enemy in the direction to the final position, until it reaches it.
-        if enemy_transform.translation.distance(enemy.destination) > 1.0 {
-            enemy_transform.translation += enemy.direction * time.delta_seconds() * ENEMY_SPEED;
-        } else {
-            // Play their AI
-        }
-    }
-}
-
 // When pickups go off the screen, despawn them
 pub fn despawn_pickups(
     mut commands: Commands,
@@ -294,8 +219,4 @@ pub fn get_cursor_world_coordinates(
 
 pub fn tick_pickup_spawn_timer(time: Res<Time>, mut pickup_timer: ResMut<PickupSpawnTimer>) {
     pickup_timer.timer.tick(time.delta());
-}
-
-pub fn tick_enemy_spawn_timer(time: Res<Time>, mut enemy_timer: ResMut<EnemySpawnTimer>) {
-    enemy_timer.timer.tick(time.delta());
 }

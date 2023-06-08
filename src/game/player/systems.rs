@@ -2,10 +2,12 @@ use super::components::Player;
 use super::resources::PlayerDamageInvulnerabilityTimer;
 use super::{PlayerInfo, PlayerState};
 use super::{PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_SPRITE_SIZE};
+use crate::game::enemy::components::Enemy;
+use crate::game::enemy::ENEMY_SPRITE_SIZE;
 use crate::game::events::{GameOverEvent, PlayerTakeDamageEvent};
 use crate::game::{
-    Enemy, FuelPickup, GameInfo, HealthPickup, CHAINSAW_FUEL_DRAIN_SPEED, ENEMY_SPRITE_SIZE,
-    FUEL_PICKUP_RESTORE, HEALTH_PICKUP_RESTORE, PICKUP_SPRITE_SIZE,
+    FuelPickup, GameInfo, HealthPickup, CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE,
+    HEALTH_PICKUP_RESTORE, PICKUP_SPRITE_SIZE,
 };
 
 use bevy::prelude::*;
