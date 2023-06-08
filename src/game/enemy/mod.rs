@@ -11,6 +11,7 @@ use bevy::prelude::*;
 const ENEMY_SPEED: f32 = 85.0;
 const ENEMY_SPAWN_PERIOD: f32 = 3.0;
 pub const ENEMY_SPRITE_SIZE: f32 = 64.0;
+const ENEMY_MAX_HEALTH: f32 = 10.0;
 
 pub struct EnemyPlugin;
 
@@ -21,6 +22,7 @@ impl Plugin for EnemyPlugin {
                 tick_enemy_spawn_timer,
                 spawn_enemies_over_timer,
                 move_enemies_to_arena,
+                handle_enemy_take_damage_event,
             )
                 .in_set(OnUpdate(GameState::RUNNING)),
         );

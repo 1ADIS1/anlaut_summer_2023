@@ -4,7 +4,7 @@ use super::{PlayerInfo, PlayerState};
 use super::{PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_SPRITE_SIZE};
 use crate::game::enemy::components::Enemy;
 use crate::game::enemy::ENEMY_SPRITE_SIZE;
-use crate::game::events::{GameOverEvent, PlayerTakeDamageEvent};
+use crate::game::events::{EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent};
 use crate::game::{
     FuelPickup, GameInfo, HealthPickup, CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE,
     HEALTH_PICKUP_RESTORE, PICKUP_SPRITE_SIZE,
@@ -128,15 +128,16 @@ pub fn check_player_pickup_collision(
 
 pub fn check_player_enemy_collision(
     mut player_take_damage_event_writer: EventWriter<PlayerTakeDamageEvent>,
+    mut enemy_take_damage_event_writer: EventWriter<EnemyTakeDamageEvent>,
+    mut enemies_query: Query<(&Transform, Entity), With<Enemy>>,
     player_query: Query<&Transform, With<Player>>,
     player_state: Res<State<PlayerState>>,
-    enemies_query: Query<&Transform, With<Enemy>>,
 ) {
     if let Ok(player_transform) = player_query.get_single() {
         let player_radius = PLAYER_SPRITE_SIZE / 2.0;
         let enemy_radius = ENEMY_SPRITE_SIZE / 2.0;
 
-        for enemy_transform in enemies_query.iter() {
+        for (enemy_transform, enemy_entity) in enemies_query.iter_mut() {
             // Player has collided with enemy
             if player_transform
                 .translation
@@ -149,11 +150,10 @@ pub fn check_player_enemy_collision(
                         player_take_damage_event_writer.send(PlayerTakeDamageEvent {});
                     }
                     // If the player already took damage
-                    PlayerState::DAMAGED => {
-                        println!("Player is invulnerable!");
-                    }
+                    PlayerState::DAMAGED => {}
+                    // Send the event, when enemy takes damage
                     PlayerState::CHAINSAW => {
-                        // TODO: enemy take damage
+                        enemy_take_damage_event_writer.send(EnemyTakeDamageEvent { enemy_entity });
                     }
                 };
             }
@@ -239,14 +239,10 @@ pub fn tick_damage_invulnerability_timer(
     time: Res<Time>,
 ) {
     damage_invulnerability_timer.timer.tick(time.delta());
-    println!(
-        "Invulnerability timer: {}",
-        damage_invulnerability_timer.timer.elapsed_secs()
-    );
 }
 
 pub fn player_info_updated(player_info: Res<PlayerInfo>) {
     if player_info.is_changed() {
-        println!("Player info: {:?}", player_info);
+        // println!("Player info: {:?}", player_info);
     }
 }

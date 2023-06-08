@@ -12,6 +12,8 @@ const PLAYER_MAX_HEALTH: usize = 5;
 const PLAYER_FUEL_CAPACITY: f32 = 100.0;
 const PLAYER_SPRITE_SIZE: f32 = 64.0;
 const PLAYER_TAKE_DAMAGE_INVULNERABILITY_PERIOD: f32 = 2.0;
+pub const PLAYER_DAMAGE: usize = 1;
+pub const PLAYER_DAMAGE_SPEED: f32 = 30.0;
 
 pub struct PlayerPlugin;
 

@@ -1,6 +1,8 @@
+use super::components::*;
 use super::resources::EnemySpawnTimer;
-use crate::game::enemy::components::Enemy;
-use crate::game::enemy::{ENEMY_SPEED, ENEMY_SPRITE_SIZE};
+use super::{ENEMY_MAX_HEALTH, ENEMY_SPEED, ENEMY_SPRITE_SIZE};
+use crate::game::events::EnemyTakeDamageEvent;
+use crate::game::player::{PLAYER_DAMAGE, PLAYER_DAMAGE_SPEED};
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -37,6 +39,7 @@ pub fn spawn_enemies_over_timer(
                 ..default()
             },
             Enemy {
+                current_hp: ENEMY_MAX_HEALTH,
                 direction: enemy_direction,
                 destination: enemy_final_position,
             },
@@ -55,6 +58,27 @@ pub fn move_enemies_to_arena(mut enemies_query: Query<(&mut Transform, &Enemy)>,
         } else {
             // Play enemy AI
         }
+    }
+}
+
+pub fn handle_enemy_take_damage_event(
+    mut commands: Commands,
+    mut enemy_take_damage_event_reader: EventReader<EnemyTakeDamageEvent>,
+    mut enemies_query: Query<&mut Enemy>,
+    time: Res<Time>,
+) {
+    for enemy_damage_event in enemy_take_damage_event_reader.iter() {
+        // Check if Enemy component exists on the entity from EnemyTakeDamageEvent
+        // (it should definitely exists, but better to check twice)
+        if let Ok(mut enemy_struct) = enemies_query.get_mut(enemy_damage_event.enemy_entity) {
+            if enemy_struct.current_hp <= 0.0 {
+                commands.entity(enemy_damage_event.enemy_entity).despawn();
+            } else {
+                // Drain enemy's hp
+                enemy_struct.current_hp -=
+                    PLAYER_DAMAGE as f32 * PLAYER_DAMAGE_SPEED * time.delta_seconds();
+            }
+        };
     }
 }
 

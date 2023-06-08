@@ -3,7 +3,7 @@ mod events;
 mod player;
 
 use enemy::EnemyPlugin;
-use events::{GameOverEvent, PlayerTakeDamageEvent};
+use events::{EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent};
 use player::components::Player;
 use player::PlayerPlugin;
 
@@ -30,6 +30,7 @@ impl Plugin for GamePlugin {
             .add_state::<GameState>()
             .add_event::<PlayerTakeDamageEvent>()
             .add_event::<GameOverEvent>()
+            .add_event::<EnemyTakeDamageEvent>()
             .init_resource::<GameInfo>()
             .init_resource::<PickupSpawnTimer>()
             .add_startup_system(spawn_camera)
