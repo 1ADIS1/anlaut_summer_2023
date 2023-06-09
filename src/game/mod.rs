@@ -2,7 +2,6 @@ mod enemy;
 mod events;
 mod player;
 
-use crate::ui::UIPlugin;
 use enemy::EnemyPlugin;
 use events::{EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent};
 use player::components::Player;
@@ -28,7 +27,6 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(PlayerPlugin)
             .add_plugin(EnemyPlugin)
-            .add_plugin(UIPlugin)
             .add_state::<GameState>()
             .add_event::<PlayerTakeDamageEvent>()
             .add_event::<GameOverEvent>()

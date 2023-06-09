@@ -20,13 +20,5 @@ pub fn spawn_game_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 pub fn build_fuel_bar(mut commands: &mut Commands, asset_server: &Res<AssetServer>) -> Entity {
-    commands
-        .spawn((
-            NodeBundle {
-                background_color: Color::RED.into(),
-                ..default()
-            },
-            GameUI {},
-        ))
-        .id()
+    commands.spawn((NodeBundle { ..default() }, GameUI {})).id()
 }
