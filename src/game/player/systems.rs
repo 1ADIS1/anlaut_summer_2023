@@ -157,7 +157,6 @@ pub fn check_player_enemy_collision(
                     // Send the event, when enemy takes damage
                     PlayerState::CHAINSAW => {
                         enemy_take_damage_event_writer.send(EnemyTakeDamageEvent { enemy_entity });
-                        return;
                     }
                 };
             }

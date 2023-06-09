@@ -1,11 +1,14 @@
+mod components;
 mod enemy;
 mod events;
 pub mod player;
+mod systems;
 
 use enemy::EnemyPlugin;
 use events::{EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent};
 use player::components::Player;
 use player::PlayerPlugin;
+use systems::*;
 
 use bevy::{prelude::*, window::PrimaryWindow};
 use rand::prelude::*;
@@ -21,6 +24,8 @@ const HEALTH_PICKUP_RESTORE: usize = 1;
 
 pub const CHAINSAW_FUEL_DRAIN_SPEED: f32 = 10.0;
 
+pub const PARALLAX_SPEED: f32 = 100.0;
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -33,7 +38,9 @@ impl Plugin for GamePlugin {
             .add_event::<EnemyTakeDamageEvent>()
             .init_resource::<GameInfo>()
             .init_resource::<PickupSpawnTimer>()
-            .add_startup_system(spawn_camera)
+            .add_systems(
+                (spawn_camera, spawn_parallax_background).in_schedule(OnEnter(GameState::RUNNING)),
+            )
             .add_systems((
                 get_cursor_world_coordinates,
                 spawn_pickups_over_time,
@@ -41,6 +48,7 @@ impl Plugin for GamePlugin {
                 tick_pickup_spawn_timer,
                 despawn_pickups,
                 handle_game_over_event,
+                move_parallax_background,
             ));
     }
 }
