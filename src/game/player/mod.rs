@@ -1,5 +1,5 @@
 pub mod components;
-mod resources;
+pub mod resources;
 mod systems;
 
 use self::resources::*;
@@ -8,7 +8,7 @@ use systems::*;
 
 use bevy::prelude::*;
 
-const PLAYER_MAX_HEALTH: usize = 5;
+pub const PLAYER_MAX_HEALTH: usize = 5;
 const PLAYER_FUEL_CAPACITY: f32 = 100.0;
 const PLAYER_SPRITE_SIZE: f32 = 64.0;
 const PLAYER_TAKE_DAMAGE_INVULNERABILITY_PERIOD: f32 = 2.0;
@@ -28,11 +28,10 @@ impl Plugin for PlayerPlugin {
                     move_player,
                     limit_player_movement.after(move_player),
                     check_player_pickup_collision,
-                    player_info_updated,
                     transition_to_player_chainsaw_state.run_if(in_state(PlayerState::REGULAR)),
                     transition_to_player_regular_state.run_if(in_state(PlayerState::CHAINSAW)),
                     drain_fuel.run_if(in_state(PlayerState::CHAINSAW)),
-                    check_player_enemy_collision,
+                    check_player_enemy_collision.run_if(not(in_state(PlayerState::DAMAGED))),
                     handle_player_take_damage_event,
                     player_take_damage_invulnerability.run_if(in_state(PlayerState::DAMAGED)),
                     tick_damage_invulnerability_timer.run_if(in_state(PlayerState::DAMAGED)),

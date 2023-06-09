@@ -1,6 +1,6 @@
 mod enemy;
 mod events;
-mod player;
+pub mod player;
 
 use enemy::EnemyPlugin;
 use events::{EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent};

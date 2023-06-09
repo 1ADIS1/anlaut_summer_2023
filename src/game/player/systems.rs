@@ -200,6 +200,7 @@ pub fn limit_player_movement(
 
 // When player has no health, send game over event
 // Otherwise, decrement health and make player invulnerable for 1 second.
+// TODO: fix bug when player takes several points of damage.
 pub fn handle_player_take_damage_event(
     mut player_take_damage_event_reader: EventReader<PlayerTakeDamageEvent>,
     mut game_over_event_writer: EventWriter<GameOverEvent>,
@@ -207,11 +208,12 @@ pub fn handle_player_take_damage_event(
     mut next_player_state: ResMut<NextState<PlayerState>>,
 ) {
     for _ in player_take_damage_event_reader.iter() {
-        if player_info.current_hp <= 0 {
+        if player_info.current_hp <= 1 {
             game_over_event_writer.send(GameOverEvent {});
+            player_info.current_hp = 0;
         } else {
-            next_player_state.set(PlayerState::DAMAGED);
             player_info.current_hp -= 1;
+            next_player_state.set(PlayerState::DAMAGED);
         }
         return;
     }
@@ -239,10 +241,4 @@ pub fn tick_damage_invulnerability_timer(
     time: Res<Time>,
 ) {
     damage_invulnerability_timer.timer.tick(time.delta());
-}
-
-pub fn player_info_updated(player_info: Res<PlayerInfo>) {
-    if player_info.is_changed() {
-        // println!("Player info: {:?}", player_info);
-    }
 }
