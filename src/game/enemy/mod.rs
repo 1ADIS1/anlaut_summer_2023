@@ -21,8 +21,10 @@ impl Plugin for EnemyPlugin {
             (
                 tick_enemy_spawn_timer,
                 spawn_enemies_over_timer,
-                move_enemies_to_arena,
                 handle_enemy_take_damage_event,
+                move_enemies_to_destination,
+                follow_player,
+                limit_enemy_movement_in_engaging_state.after(move_enemies_to_destination),
             )
                 .in_set(OnUpdate(GameState::RUNNING)),
         );
