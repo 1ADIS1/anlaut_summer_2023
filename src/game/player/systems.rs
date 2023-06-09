@@ -148,12 +148,16 @@ pub fn check_player_enemy_collision(
                 match player_state.0 {
                     PlayerState::REGULAR => {
                         player_take_damage_event_writer.send(PlayerTakeDamageEvent {});
+                        return;
                     }
                     // If the player already took damage
-                    PlayerState::DAMAGED => {}
+                    PlayerState::DAMAGED => {
+                        return;
+                    }
                     // Send the event, when enemy takes damage
                     PlayerState::CHAINSAW => {
                         enemy_take_damage_event_writer.send(EnemyTakeDamageEvent { enemy_entity });
+                        return;
                     }
                 };
             }
@@ -198,9 +202,9 @@ pub fn limit_player_movement(
     }
 }
 
-// When player has no health, send game over event
+// Runs only when the player is in the regular state.
+// When player has no health, send game over event.
 // Otherwise, decrement health and make player invulnerable for 1 second.
-// TODO: fix bug when player takes several points of damage.
 pub fn handle_player_take_damage_event(
     mut player_take_damage_event_reader: EventReader<PlayerTakeDamageEvent>,
     mut game_over_event_writer: EventWriter<GameOverEvent>,
@@ -212,8 +216,8 @@ pub fn handle_player_take_damage_event(
             game_over_event_writer.send(GameOverEvent {});
             player_info.current_hp = 0;
         } else {
-            player_info.current_hp -= 1;
             next_player_state.set(PlayerState::DAMAGED);
+            player_info.current_hp -= 1;
         }
         return;
     }

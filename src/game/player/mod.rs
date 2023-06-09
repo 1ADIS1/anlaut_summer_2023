@@ -32,7 +32,7 @@ impl Plugin for PlayerPlugin {
                     transition_to_player_regular_state.run_if(in_state(PlayerState::CHAINSAW)),
                     drain_fuel.run_if(in_state(PlayerState::CHAINSAW)),
                     check_player_enemy_collision.run_if(not(in_state(PlayerState::DAMAGED))),
-                    handle_player_take_damage_event,
+                    handle_player_take_damage_event.run_if(in_state(PlayerState::REGULAR)),
                     player_take_damage_invulnerability.run_if(in_state(PlayerState::DAMAGED)),
                     tick_damage_invulnerability_timer.run_if(in_state(PlayerState::DAMAGED)),
                 )
