@@ -14,6 +14,8 @@ const PLAYER_SPRITE_SIZE: f32 = 64.0;
 const PLAYER_TAKE_DAMAGE_INVULNERABILITY_PERIOD: f32 = 2.0;
 pub const PLAYER_DAMAGE: usize = 1;
 pub const PLAYER_DAMAGE_SPEED: f32 = 30.0;
+const PLAYER_REGULAR_SPEED: f32 = 225.0;
+const PLAYER_CHAINSAW_SPEED: f32 = 450.0;
 
 pub struct PlayerPlugin;
 

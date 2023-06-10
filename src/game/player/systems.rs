@@ -1,13 +1,17 @@
 use super::components::Player;
 use super::resources::PlayerDamageInvulnerabilityTimer;
 use super::{PlayerInfo, PlayerState};
-use super::{PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_SPRITE_SIZE};
+use super::{
+    PLAYER_CHAINSAW_SPEED, PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_REGULAR_SPEED,
+    PLAYER_SPRITE_SIZE,
+};
+use crate::game::components::{FuelPickup, HealthPickup};
 use crate::game::enemy::components::Enemy;
 use crate::game::enemy::ENEMY_SPRITE_SIZE;
 use crate::game::events::{EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent};
+use crate::game::GameInfo;
 use crate::game::{
-    FuelPickup, GameInfo, HealthPickup, CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE,
-    HEALTH_PICKUP_RESTORE, PICKUP_SPRITE_SIZE,
+    CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE, HEALTH_PICKUP_RESTORE, PICKUP_SPRITE_SIZE,
 };
 
 use bevy::prelude::*;
@@ -30,7 +34,9 @@ pub fn spawn_player(
             texture: asset_server.load("sprites/player.png"),
             ..default()
         },
-        Player {},
+        Player {
+            current_speed: PLAYER_REGULAR_SPEED,
+        },
     ));
 }
 
@@ -41,17 +47,18 @@ pub fn spawn_player(
 // 3. Clicks the LMB
 pub fn transition_to_player_chainsaw_state(
     mut next_player_state: ResMut<NextState<PlayerState>>,
-    mut player_query: Query<&mut Handle<Image>, With<Player>>,
+    mut player_query: Query<(&mut Handle<Image>, &mut Player)>,
     mouse_input: Res<Input<MouseButton>>,
     player_info: Res<PlayerInfo>,
     asset_server: Res<AssetServer>,
 ) {
-    if let Ok(mut player_texture) = player_query.get_single_mut() {
+    if let Ok((mut player_texture, mut player)) = player_query.get_single_mut() {
         if player_info.current_fuel == PLAYER_FUEL_CAPACITY
             && mouse_input.just_pressed(MouseButton::Left)
         {
             next_player_state.set(PlayerState::CHAINSAW);
             *player_texture = asset_server.load("sprites/chainsaw_form.png");
+            player.current_speed = PLAYER_CHAINSAW_SPEED;
 
             println!("Entered chainsaw mode!");
         }
@@ -61,14 +68,15 @@ pub fn transition_to_player_chainsaw_state(
 // TODO: plays the animation, sound and shader.
 pub fn transition_to_player_regular_state(
     mut next_player_state: ResMut<NextState<PlayerState>>,
-    mut player_query: Query<&mut Handle<Image>, With<Player>>,
+    mut player_query: Query<(&mut Handle<Image>, &mut Player)>,
     player_info: Res<PlayerInfo>,
     asset_server: Res<AssetServer>,
 ) {
-    if let Ok(mut player_texture) = player_query.get_single_mut() {
+    if let Ok((mut player_texture, mut player)) = player_query.get_single_mut() {
         if player_info.current_fuel < 1.0 {
             next_player_state.set(PlayerState::REGULAR);
             *player_texture = asset_server.load("sprites/player.png");
+            player.current_speed = PLAYER_REGULAR_SPEED;
             println!("Returned back to regular form!");
         }
     }
@@ -164,13 +172,20 @@ pub fn check_player_enemy_collision(
     }
 }
 
+// TODO: fix 'glitchy' movement
 pub fn move_player(
-    mut player_query: Query<&mut Transform, With<Player>>,
+    mut player_query: Query<(&mut Transform, &Player)>,
     game_info: Res<GameInfo>,
+    time: Res<Time>,
 ) {
-    if let Ok(mut player) = player_query.get_single_mut() {
+    if let Ok((mut player_transform, player)) = player_query.get_single_mut() {
         let cursor_position = game_info.cursor_position;
-        player.translation = Vec3::new(cursor_position.x, cursor_position.y, 0.0);
+        let destination = Vec3::new(cursor_position.x, cursor_position.y, 0.0);
+        let direction = (destination - player_transform.translation).normalize();
+
+        if player_transform.translation.distance(destination) > 10.0 {
+            player_transform.translation += direction * player.current_speed * time.delta_seconds();
+        }
     }
 }
 
