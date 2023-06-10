@@ -24,7 +24,7 @@ const HEALTH_PICKUP_RESTORE: usize = 1;
 
 pub const CHAINSAW_FUEL_DRAIN_SPEED: f32 = 10.0;
 
-pub const PARALLAX_SPEED: f32 = 100.0;
+pub const PARALLAX_SPEED: f32 = 500.0;
 
 pub struct GamePlugin;
 
