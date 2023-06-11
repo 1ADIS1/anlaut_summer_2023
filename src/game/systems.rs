@@ -1,6 +1,13 @@
+use crate::game::player::systems::change_player_fuel;
+
 use super::components::*;
+use super::enemy::components::Enemy;
+use super::enemy::systems::change_enemy_health;
 use super::events::*;
 use super::player::components::Player;
+use super::player::resources::PlayerInfo;
+use super::player::PlayerState;
+use super::CounterAttackTimer;
 use super::{GameInfo, GameState, PickupSpawnTimer};
 use super::{PARALLAX_SPEED, PICKUP_SPEED, PICKUP_SPRITE_SIZE};
 
@@ -72,9 +79,7 @@ pub fn move_parallax_background(
         if parallax_bg_transform.translation.y - primary_window.height() / 2.0
             > primary_window.height()
         {
-            parallax_bg_transform.translation.y =
-                -(primary_window.height() / 2.0) + PARALLAX_SPEED * time.delta_seconds();
-            continue;
+            parallax_bg_transform.translation.y -= 2.0 * primary_window.height();
         }
     }
 }
@@ -192,7 +197,7 @@ pub fn handle_game_over_event(
     for _ in game_over_event_reader.iter() {
         if let Ok(player_entity) = player_query.get_single() {
             commands.entity(player_entity).despawn();
-            next_game_state.set(GameState::GAMEOVER);
+            next_game_state.set(GameState::Gameover);
             println!("Game over!");
             return;
         }
@@ -217,6 +222,100 @@ pub fn get_cursor_world_coordinates(
     }
 }
 
+pub fn handle_counter_attack_event(
+    mut enemy_counter_attack_event_reader: EventReader<EnemyCounterAttackEvent>,
+    mut game_info: ResMut<GameInfo>,
+) {
+    for counter_attack_event in enemy_counter_attack_event_reader.iter() {
+        game_info.counter_attack_event = counter_attack_event.clone();
+    }
+}
+
+// If the player passes the counter attack:
+// 1. Player instantly kills enemy
+// 2. Player gains some fuel
+pub fn handle_counter_attack_state(
+    mut game_info: ResMut<GameInfo>,
+    mut counter_attack_event_failed_writer: EventWriter<CounterAttackFailed>,
+    counter_attack_timer: Res<CounterAttackTimer>,
+    mouse_input: Res<Input<MouseButton>>,
+) {
+    if game_info.counter_attack_event.keys_to_press.is_empty() {
+        println!("Counter attack passed successfully!");
+        // TODO
+    }
+
+    if counter_attack_timer.timer.just_finished() {
+        println!("Counter attack time has run out!");
+
+        counter_attack_event_failed_writer.send(CounterAttackFailed {
+            enemy_entity: game_info.counter_attack_event.enemy_entity,
+        });
+        return;
+    }
+
+    if mouse_input.just_pressed(game_info.counter_attack_event.keys_to_press[0]) {
+        println!("One key pressed successfully!");
+        game_info.counter_attack_event.keys_to_press.remove(0);
+    }
+    // else {
+    //     counter_attack_event_failed_writer.send(CounterAttackFailed {
+    //         enemy_entity: game_info.counter_attack_event.enemy_entity,
+    //     });
+    // }
+}
+
+// 1. Player leaves the chainsaw mode | TODO
+// 2. Player looses some fuel
+// 3. Player takes damage | TODO
+// 4. Enemy heals for some hp
+pub fn handle_counter_attack_failed_event(
+    mut counter_attack_event_failed_reader: EventReader<CounterAttackFailed>,
+    mut next_game_state: ResMut<NextState<GameState>>,
+    mut counter_attack_timer: ResMut<CounterAttackTimer>,
+    mut enemies_query: Query<&mut Enemy>,
+    mut player_info: ResMut<PlayerInfo>,
+    mut player_take_damage_event_writer: EventWriter<PlayerTakeDamageEvent>,
+    mut player_transition_to_regular_form_event_writer: EventWriter<
+        PlayerTransitionToRegularFormEvent,
+    >,
+) {
+    for failed_counter_attack_event in counter_attack_event_failed_reader.iter() {
+        println!("Counter attack has failed!");
+
+        // Change state
+        next_game_state.set(GameState::Running);
+
+        // Reset timer
+        counter_attack_timer.timer.reset();
+
+        // Player looses fuel
+        let fuel_lose_amount = player_info.counter_attack_failed_fuel_lose;
+        change_player_fuel(&mut player_info, fuel_lose_amount);
+
+        // Send transition and damage events
+        player_transition_to_regular_form_event_writer.send(PlayerTransitionToRegularFormEvent {});
+        player_take_damage_event_writer.send(PlayerTakeDamageEvent {});
+
+        // Heal enemy
+        if let Ok(mut enemy_struct) =
+            enemies_query.get_mut(failed_counter_attack_event.enemy_entity)
+        {
+            let heal_amount = enemy_struct.enemy_counter_attack_heal;
+            change_enemy_health(&mut enemy_struct, heal_amount);
+        }
+
+        return;
+    }
+}
+
 pub fn tick_pickup_spawn_timer(time: Res<Time>, mut pickup_timer: ResMut<PickupSpawnTimer>) {
     pickup_timer.timer.tick(time.delta());
+}
+
+pub fn tick_counter_attack_timer(
+    mut counter_attack_timer: ResMut<CounterAttackTimer>,
+    time: Res<Time>,
+) {
+    counter_attack_timer.timer.tick(time.delta());
 }

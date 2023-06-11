@@ -1,9 +1,15 @@
 use super::components::*;
 use super::resources::EnemySpawnTimer;
-use super::{ENEMY_MAX_HEALTH, ENEMY_SPEED, ENEMY_SPRITE_SIZE};
-use crate::game::events::EnemyTakeDamageEvent;
+use super::{
+    ENEMY_COUNTER_ATTACK_HEAL, ENEMY_COUNTER_STATE_HEALTH, ENEMY_MAX_HEALTH, ENEMY_SPEED,
+    ENEMY_SPRITE_SIZE,
+};
+use crate::game::events::{EnemyCounterAttackEvent, EnemyTakeDamageEvent};
 use crate::game::player::components::Player;
-use crate::game::player::{PlayerState, PLAYER_DAMAGE, PLAYER_DAMAGE_SPEED};
+use crate::game::player::{
+    PlayerState, CHAINSAW_ENEMY_SLOW_DOWN_FACTOR, PLAYER_DAMAGE, PLAYER_DAMAGE_SPEED,
+};
+use crate::game::{GameState, COUNTER_ATTACK_MICE_NUMBER};
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -43,9 +49,12 @@ pub fn spawn_enemies_over_timer(
                 ..default()
             },
             Enemy {
+                max_hp: ENEMY_MAX_HEALTH,
                 current_hp: ENEMY_MAX_HEALTH,
+                counter_state_health_threshold: ENEMY_COUNTER_STATE_HEALTH,
+                enemy_counter_attack_heal: ENEMY_COUNTER_ATTACK_HEAL,
                 speed: ENEMY_SPEED,
-                state: EnemyState::SPAWNED,
+                state: EnemyState::Spawned,
                 direction: enemy_direction,
                 destination: enemy_destination,
                 destination_reached: false,
@@ -66,13 +75,13 @@ pub fn move_enemies_to_destination(
     time: Res<Time>,
 ) {
     for (mut enemy_transform, mut enemy) in enemies_query.iter_mut() {
-        if enemy.destination_reached && enemy.state == EnemyState::SPAWNED {
-            enemy.state = EnemyState::ENGAGING;
+        if enemy.destination_reached && enemy.state == EnemyState::Spawned {
+            enemy.state = EnemyState::Engaging;
         }
 
         if enemy_transform.translation.distance(enemy.destination) > 1.0 {
             enemy.destination_reached = false;
-            enemy_transform.translation += enemy.direction * time.delta_seconds() * ENEMY_SPEED;
+            enemy_transform.translation += enemy.direction * time.delta_seconds() * enemy.speed;
         } else {
             enemy.destination_reached = true;
         }
@@ -92,7 +101,7 @@ pub fn limit_enemy_movement_in_engaging_state(
     let max_y = primary_window.height() - enemy_radius;
 
     for (mut enemy_transform, enemy) in enemies_query.iter_mut() {
-        if enemy.state != EnemyState::ENGAGING {
+        if enemy.state != EnemyState::Engaging {
             return;
         }
 
@@ -120,7 +129,7 @@ pub fn follow_player(
 ) {
     if let Ok(player_transform) = player_query.get_single() {
         for (enemy_transform, mut enemy) in enemies_query.iter_mut() {
-            if enemy.state == EnemyState::ENGAGING {
+            if enemy.state == EnemyState::Engaging {
                 enemy.destination = player_transform.translation;
                 enemy.direction = if player_state.0 == PlayerState::CHAINSAW {
                     (enemy_transform.translation - player_transform.translation).normalize()
@@ -135,7 +144,9 @@ pub fn follow_player(
 pub fn handle_enemy_take_damage_event(
     mut commands: Commands,
     mut enemy_take_damage_event_reader: EventReader<EnemyTakeDamageEvent>,
+    mut enemy_counter_attack_event_writer: EventWriter<EnemyCounterAttackEvent>,
     mut enemies_query: Query<&mut Enemy>,
+    mut next_game_state: ResMut<NextState<GameState>>,
     time: Res<Time>,
 ) {
     for enemy_damage_event in enemy_take_damage_event_reader.iter() {
@@ -144,15 +155,51 @@ pub fn handle_enemy_take_damage_event(
         if let Ok(mut enemy_struct) = enemies_query.get_mut(enemy_damage_event.enemy_entity) {
             if enemy_struct.current_hp <= 0.0 {
                 commands.entity(enemy_damage_event.enemy_entity).despawn();
+            } else if enemy_struct.current_hp <= enemy_struct.counter_state_health_threshold {
+                // Go to counter attack state
+                let counter_attack_event =
+                    create_enemy_counter_attack_event(enemy_damage_event.enemy_entity);
+                enemy_counter_attack_event_writer.send(counter_attack_event);
+                next_game_state.set(GameState::CounterAttack);
             } else {
-                // Drain enemy's hp
+                // Drain enemy's hp and slow it down
                 enemy_struct.current_hp -=
                     PLAYER_DAMAGE as f32 * PLAYER_DAMAGE_SPEED * time.delta_seconds();
+                enemy_struct.speed -= time.delta_seconds() * CHAINSAW_ENEMY_SLOW_DOWN_FACTOR;
             }
         };
     }
 }
 
+pub fn create_enemy_counter_attack_event(enemy_entity: Entity) -> EnemyCounterAttackEvent {
+    let mut keys_to_press = vec![];
+
+    for _ in 0..COUNTER_ATTACK_MICE_NUMBER {
+        if random::<f32>() > 0.5 {
+            keys_to_press.push(MouseButton::Left);
+        } else {
+            keys_to_press.push(MouseButton::Right);
+        }
+    }
+
+    EnemyCounterAttackEvent {
+        enemy_entity,
+        keys_to_press,
+    }
+}
+
 pub fn tick_enemy_spawn_timer(time: Res<Time>, mut enemy_timer: ResMut<EnemySpawnTimer>) {
     enemy_timer.timer.tick(time.delta());
+}
+
+pub fn change_enemy_health(enemy_struct: &mut Enemy, amount: f32) {
+    enemy_struct.current_hp = if enemy_struct.current_hp + amount > enemy_struct.max_hp {
+        enemy_struct.max_hp
+    } else if enemy_struct.current_hp + amount < 0.0 {
+        0.0
+    } else {
+        enemy_struct.current_hp + amount
+    };
+
+    println!("Enemy has healed for {}", amount);
 }

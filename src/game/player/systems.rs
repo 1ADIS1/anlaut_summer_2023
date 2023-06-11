@@ -8,7 +8,9 @@ use super::{
 use crate::game::components::{FuelPickup, HealthPickup};
 use crate::game::enemy::components::Enemy;
 use crate::game::enemy::ENEMY_SPRITE_SIZE;
-use crate::game::events::{EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent};
+use crate::game::events::{
+    EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent, PlayerTransitionToRegularFormEvent,
+};
 use crate::game::GameInfo;
 use crate::game::{
     CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE, HEALTH_PICKUP_RESTORE, PICKUP_SPRITE_SIZE,
@@ -73,18 +75,26 @@ pub fn transition_to_player_regular_state(
     asset_server: Res<AssetServer>,
 ) {
     if let Ok((mut player_texture, mut player)) = player_query.get_single_mut() {
-        if player_info.current_fuel < 1.0 {
-            next_player_state.set(PlayerState::REGULAR);
-            *player_texture = asset_server.load("sprites/player.png");
-            player.current_speed = PLAYER_REGULAR_SPEED;
-            println!("Returned back to regular form!");
-        }
+        next_player_state.set(PlayerState::REGULAR);
+        *player_texture = asset_server.load("sprites/player.png");
+        player.current_speed = PLAYER_REGULAR_SPEED;
+        println!("Returned back to regular form!");
     }
 }
 
 // Decrease current fuel value, while in the chainsaw state
-pub fn drain_fuel(mut player_info: ResMut<PlayerInfo>, time: Res<Time>) {
+pub fn drain_fuel(
+    mut player_info: ResMut<PlayerInfo>,
+    mut player_transition_to_regular_form_event_writer: EventWriter<
+        PlayerTransitionToRegularFormEvent,
+    >,
+    time: Res<Time>,
+) {
     player_info.current_fuel -= CHAINSAW_FUEL_DRAIN_SPEED * time.delta_seconds();
+
+    if player_info.current_fuel < 1.0 {
+        player_transition_to_regular_form_event_writer.send(PlayerTransitionToRegularFormEvent {});
+    }
 }
 
 pub fn check_player_pickup_collision(
@@ -251,6 +261,16 @@ pub fn player_take_damage_invulnerability(
             player_sprite.color.set_a(1.0);
             damage_invulnerability_timer.timer.reset();
         }
+    }
+}
+
+pub fn change_player_fuel(player_info: &mut PlayerInfo, amount: f32) {
+    player_info.current_fuel = if player_info.current_fuel + amount < 0.0 {
+        0.0
+    } else if player_info.current_fuel + amount > PLAYER_FUEL_CAPACITY {
+        PLAYER_FUEL_CAPACITY
+    } else {
+        player_info.current_fuel + amount
     }
 }
 

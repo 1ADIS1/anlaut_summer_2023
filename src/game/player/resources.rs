@@ -1,12 +1,16 @@
 use bevy::prelude::*;
 
-use super::{PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_TAKE_DAMAGE_INVULNERABILITY_PERIOD};
+use super::{
+    PLAYER_ATTACK_FAILED_FUEL_LOSE, PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH,
+    PLAYER_TAKE_DAMAGE_INVULNERABILITY_PERIOD,
+};
 
 #[derive(Resource, Debug)]
 pub struct PlayerInfo {
     pub current_fuel: f32,
     pub current_hp: usize,
     pub blood: usize,
+    pub counter_attack_failed_fuel_lose: f32,
 }
 
 impl Default for PlayerInfo {
@@ -15,6 +19,7 @@ impl Default for PlayerInfo {
             current_fuel: PLAYER_FUEL_CAPACITY,
             current_hp: PLAYER_MAX_HEALTH,
             blood: 0,
+            counter_attack_failed_fuel_lose: PLAYER_ATTACK_FAILED_FUEL_LOSE,
         }
     }
 }

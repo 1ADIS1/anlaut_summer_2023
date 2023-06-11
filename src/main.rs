@@ -1,9 +1,10 @@
 mod game;
 mod ui;
 
-use bevy::{prelude::*, window::PresentMode};
-use game::GamePlugin;
+use game::{GamePlugin, GameState};
 use ui::UIPlugin;
+
+use bevy::{prelude::*, window::PresentMode};
 
 fn main() {
     App::new()
@@ -21,7 +22,8 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugin(GamePlugin)
+        .add_state::<GameState>()
         .add_plugin(UIPlugin)
+        .add_plugin(GamePlugin)
         .run();
 }

@@ -1,6 +1,6 @@
 pub mod components;
 pub mod resources;
-mod systems;
+pub mod systems;
 
 use self::resources::*;
 use super::GameState;
@@ -16,6 +16,8 @@ pub const PLAYER_DAMAGE: usize = 1;
 pub const PLAYER_DAMAGE_SPEED: f32 = 30.0;
 const PLAYER_REGULAR_SPEED: f32 = 225.0;
 const PLAYER_CHAINSAW_SPEED: f32 = 450.0;
+pub const CHAINSAW_ENEMY_SLOW_DOWN_FACTOR: f32 = 2.0;
+const PLAYER_ATTACK_FAILED_FUEL_LOSE: f32 = 25.0;
 
 pub struct PlayerPlugin;
 
@@ -24,7 +26,7 @@ impl Plugin for PlayerPlugin {
         app.add_state::<PlayerState>()
             .init_resource::<PlayerInfo>()
             .init_resource::<PlayerDamageInvulnerabilityTimer>()
-            .add_startup_system(spawn_player)
+            .add_system(spawn_player.in_schedule(OnExit(GameState::MainMenu)))
             .add_systems(
                 (
                     move_player,
@@ -38,7 +40,7 @@ impl Plugin for PlayerPlugin {
                     player_take_damage_invulnerability.run_if(in_state(PlayerState::DAMAGED)),
                     tick_damage_invulnerability_timer.run_if(in_state(PlayerState::DAMAGED)),
                 )
-                    .in_set(OnUpdate(GameState::RUNNING)),
+                    .in_set(OnUpdate(GameState::Running)),
             );
     }
 }
