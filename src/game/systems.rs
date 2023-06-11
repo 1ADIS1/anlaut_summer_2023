@@ -265,9 +265,9 @@ pub fn handle_counter_attack_state(
     // }
 }
 
-// 1. Player leaves the chainsaw mode | TODO
-// 2. Player looses some fuel
-// 3. Player takes damage | TODO
+// 1. Player leaves the chainsaw mode
+// 2. Player looses some fuel | TODO
+// 3. Player takes damage
 // 4. Enemy heals for some hp
 pub fn handle_counter_attack_failed_event(
     mut counter_attack_event_failed_reader: EventReader<CounterAttackFailed>,

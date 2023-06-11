@@ -17,7 +17,7 @@ pub const PLAYER_DAMAGE_SPEED: f32 = 30.0;
 const PLAYER_REGULAR_SPEED: f32 = 225.0;
 const PLAYER_CHAINSAW_SPEED: f32 = 450.0;
 pub const CHAINSAW_ENEMY_SLOW_DOWN_FACTOR: f32 = 2.0;
-const PLAYER_ATTACK_FAILED_FUEL_LOSE: f32 = 25.0;
+const PLAYER_ATTACK_FAILED_FUEL_LOSE: f32 = -25.0;
 
 pub struct PlayerPlugin;
 
@@ -33,7 +33,7 @@ impl Plugin for PlayerPlugin {
                     limit_player_movement.after(move_player),
                     check_player_pickup_collision,
                     transition_to_player_chainsaw_state.run_if(in_state(PlayerState::REGULAR)),
-                    transition_to_player_regular_state.run_if(in_state(PlayerState::CHAINSAW)),
+                    transition_to_player_regular_state,
                     drain_fuel.run_if(in_state(PlayerState::CHAINSAW)),
                     check_player_enemy_collision.run_if(not(in_state(PlayerState::DAMAGED))),
                     handle_player_take_damage_event.run_if(in_state(PlayerState::REGULAR)),

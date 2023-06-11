@@ -71,14 +71,19 @@ pub fn transition_to_player_chainsaw_state(
 pub fn transition_to_player_regular_state(
     mut next_player_state: ResMut<NextState<PlayerState>>,
     mut player_query: Query<(&mut Handle<Image>, &mut Player)>,
+    mut player_transition_to_regular_form_event_reader: EventReader<
+        PlayerTransitionToRegularFormEvent,
+    >,
     player_info: Res<PlayerInfo>,
     asset_server: Res<AssetServer>,
 ) {
-    if let Ok((mut player_texture, mut player)) = player_query.get_single_mut() {
-        next_player_state.set(PlayerState::REGULAR);
-        *player_texture = asset_server.load("sprites/player.png");
-        player.current_speed = PLAYER_REGULAR_SPEED;
-        println!("Returned back to regular form!");
+    for _ in player_transition_to_regular_form_event_reader.iter() {
+        if let Ok((mut player_texture, mut player)) = player_query.get_single_mut() {
+            next_player_state.set(PlayerState::REGULAR);
+            *player_texture = asset_server.load("sprites/player.png");
+            player.current_speed = PLAYER_REGULAR_SPEED;
+            println!("Returned back to regular form!");
+        }
     }
 }
 

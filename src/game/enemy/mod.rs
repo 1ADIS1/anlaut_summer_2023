@@ -13,7 +13,7 @@ const ENEMY_SPAWN_PERIOD: f32 = 3.0;
 pub const ENEMY_SPRITE_SIZE: f32 = 64.0;
 const ENEMY_MAX_HEALTH: f32 = 10.0;
 // When does enemy goes to counter attack state
-const ENEMY_COUNTER_STATE_HEALTH: f32 = 10.0;
+const ENEMY_COUNTER_STATE_HEALTH: f32 = 5.0;
 const ENEMY_COUNTER_ATTACK_HEAL: f32 = 25.0;
 
 pub struct EnemyPlugin;
