@@ -23,7 +23,7 @@ fn main() {
             ..default()
         }))
         .add_state::<GameState>()
-        .add_plugin(UIPlugin)
         .add_plugin(GamePlugin)
+        .add_plugin(UIPlugin)
         .run();
 }

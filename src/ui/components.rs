@@ -20,3 +20,6 @@ pub struct HealthText;
 
 #[derive(Component)]
 pub struct BloodText;
+
+#[derive(Component)]
+pub struct CounterAttackTimerText;

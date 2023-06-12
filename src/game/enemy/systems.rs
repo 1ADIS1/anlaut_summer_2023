@@ -159,8 +159,10 @@ pub fn handle_enemy_take_damage_event(
                 // Go to counter attack state
                 let counter_attack_event =
                     create_enemy_counter_attack_event(enemy_damage_event.enemy_entity);
+                println!("Counter Attack event sent!");
                 enemy_counter_attack_event_writer.send(counter_attack_event);
                 next_game_state.set(GameState::CounterAttack);
+                return;
             } else {
                 // Drain enemy's hp and slow it down
                 enemy_struct.current_hp -=

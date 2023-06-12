@@ -39,6 +39,7 @@ impl Plugin for GamePlugin {
             .add_event::<EnemyCounterAttackEvent>()
             .add_event::<CounterAttackFailed>()
             .add_event::<PlayerTransitionToRegularFormEvent>()
+            .add_event::<CounterAttackSucceeded>()
             .init_resource::<GameInfo>()
             .init_resource::<PickupSpawnTimer>()
             .init_resource::<CounterAttackTimer>()
@@ -65,6 +66,7 @@ impl Plugin for GamePlugin {
                     handle_counter_attack_state,
                     tick_counter_attack_timer,
                     handle_counter_attack_failed_event,
+                    handle_counter_attack_succeeded_event,
                 )
                     .in_set(OnUpdate(GameState::CounterAttack)),
             );
@@ -102,7 +104,7 @@ impl Default for PickupSpawnTimer {
 
 #[derive(Resource)]
 pub struct CounterAttackTimer {
-    timer: Timer,
+    pub timer: Timer,
 }
 
 impl Default for CounterAttackTimer {

@@ -28,3 +28,7 @@ impl Default for EnemyCounterAttackEvent {
 pub struct CounterAttackFailed {
     pub enemy_entity: Entity,
 }
+
+pub struct CounterAttackSucceeded {
+    pub enemy_entity: Entity,
+}

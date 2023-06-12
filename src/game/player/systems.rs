@@ -2,8 +2,8 @@ use super::components::Player;
 use super::resources::PlayerDamageInvulnerabilityTimer;
 use super::{PlayerInfo, PlayerState};
 use super::{
-    PLAYER_CHAINSAW_SPEED, PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_REGULAR_SPEED,
-    PLAYER_SPRITE_SIZE,
+    CONSTANT_PLAYER_FUEL_GAIN_AMOUNT, CONSTANT_PLAYER_FUEL_GAIN_SPEED, PLAYER_CHAINSAW_SPEED,
+    PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_REGULAR_SPEED, PLAYER_SPRITE_SIZE,
 };
 use crate::game::components::{FuelPickup, HealthPickup};
 use crate::game::enemy::components::Enemy;
@@ -74,7 +74,6 @@ pub fn transition_to_player_regular_state(
     mut player_transition_to_regular_form_event_reader: EventReader<
         PlayerTransitionToRegularFormEvent,
     >,
-    player_info: Res<PlayerInfo>,
     asset_server: Res<AssetServer>,
 ) {
     for _ in player_transition_to_regular_form_event_reader.iter() {
@@ -100,6 +99,13 @@ pub fn drain_fuel(
     if player_info.current_fuel < 1.0 {
         player_transition_to_regular_form_event_writer.send(PlayerTransitionToRegularFormEvent {});
     }
+}
+
+// Player will slowly gain fuel over time in regular state
+pub fn gain_fuel_over_time(mut player_info: ResMut<PlayerInfo>, time: Res<Time>) {
+    let fuel_gain_amount =
+        CONSTANT_PLAYER_FUEL_GAIN_AMOUNT * CONSTANT_PLAYER_FUEL_GAIN_SPEED * time.delta_seconds();
+    change_player_fuel(&mut player_info, fuel_gain_amount);
 }
 
 pub fn check_player_pickup_collision(

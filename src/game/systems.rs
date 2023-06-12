@@ -6,7 +6,6 @@ use super::enemy::systems::change_enemy_health;
 use super::events::*;
 use super::player::components::Player;
 use super::player::resources::PlayerInfo;
-use super::player::PlayerState;
 use super::CounterAttackTimer;
 use super::{GameInfo, GameState, PickupSpawnTimer};
 use super::{PARALLAX_SPEED, PICKUP_SPEED, PICKUP_SPRITE_SIZE};
@@ -228,45 +227,81 @@ pub fn handle_counter_attack_event(
 ) {
     for counter_attack_event in enemy_counter_attack_event_reader.iter() {
         game_info.counter_attack_event = counter_attack_event.clone();
+        return;
     }
 }
 
-// If the player passes the counter attack:
-// 1. Player instantly kills enemy
-// 2. Player gains some fuel
 pub fn handle_counter_attack_state(
     mut game_info: ResMut<GameInfo>,
     mut counter_attack_event_failed_writer: EventWriter<CounterAttackFailed>,
+    mut counter_attack_event_succeeded_writer: EventWriter<CounterAttackSucceeded>,
     counter_attack_timer: Res<CounterAttackTimer>,
     mouse_input: Res<Input<MouseButton>>,
 ) {
-    if game_info.counter_attack_event.keys_to_press.is_empty() {
-        println!("Counter attack passed successfully!");
-        // TODO
-    }
-
     if counter_attack_timer.timer.just_finished() {
         println!("Counter attack time has run out!");
 
         counter_attack_event_failed_writer.send(CounterAttackFailed {
             enemy_entity: game_info.counter_attack_event.enemy_entity,
         });
-        return;
+    }
+
+    // Checks if incorrect button was pressed
+    for mouse_button in vec![MouseButton::Left, MouseButton::Right] {
+        if mouse_button != game_info.counter_attack_event.keys_to_press[0]
+            && mouse_input.just_pressed(mouse_button)
+        {
+            counter_attack_event_failed_writer.send(CounterAttackFailed {
+                enemy_entity: game_info.counter_attack_event.enemy_entity,
+            });
+        }
     }
 
     if mouse_input.just_pressed(game_info.counter_attack_event.keys_to_press[0]) {
         println!("One key pressed successfully!");
         game_info.counter_attack_event.keys_to_press.remove(0);
+
+        if game_info.counter_attack_event.keys_to_press.is_empty() {
+            println!("Counter attack passed successfully!");
+            counter_attack_event_succeeded_writer.send(CounterAttackSucceeded {
+                enemy_entity: game_info.counter_attack_event.enemy_entity,
+            });
+        }
     }
-    // else {
-    //     counter_attack_event_failed_writer.send(CounterAttackFailed {
-    //         enemy_entity: game_info.counter_attack_event.enemy_entity,
-    //     });
-    // }
+}
+
+// If the player passes the counter attack:
+// 1. Player kills enemy
+// 2. Player gains some fuel
+pub fn handle_counter_attack_succeeded_event(
+    mut commands: Commands,
+    mut counter_attack_event_succeeded_reader: EventReader<CounterAttackSucceeded>,
+    mut next_game_state: ResMut<NextState<GameState>>,
+    mut counter_attack_timer: ResMut<CounterAttackTimer>,
+    mut player_info: ResMut<PlayerInfo>,
+) {
+    for counter_attack_succeeded_event in counter_attack_event_succeeded_reader.iter() {
+        // Change state
+        next_game_state.set(GameState::Running);
+
+        // Reset timer
+        counter_attack_timer.timer.reset();
+
+        // despawn enemy
+        commands
+            .entity(counter_attack_succeeded_event.enemy_entity)
+            .despawn();
+
+        // Give player fuel
+        let fuel_gain_amount = player_info.counter_attack_fuel_gain;
+        change_player_fuel(&mut player_info, fuel_gain_amount);
+
+        return;
+    }
 }
 
 // 1. Player leaves the chainsaw mode
-// 2. Player looses some fuel | TODO
+// 2. Player looses some fuel
 // 3. Player takes damage
 // 4. Enemy heals for some hp
 pub fn handle_counter_attack_failed_event(
@@ -286,16 +321,16 @@ pub fn handle_counter_attack_failed_event(
         // Change state
         next_game_state.set(GameState::Running);
 
+        // Send player transition and damage events
+        player_transition_to_regular_form_event_writer.send(PlayerTransitionToRegularFormEvent {});
+        player_take_damage_event_writer.send(PlayerTakeDamageEvent {});
+
         // Reset timer
         counter_attack_timer.timer.reset();
 
         // Player looses fuel
-        let fuel_lose_amount = player_info.counter_attack_failed_fuel_lose;
-        change_player_fuel(&mut player_info, fuel_lose_amount);
-
-        // Send transition and damage events
-        player_transition_to_regular_form_event_writer.send(PlayerTransitionToRegularFormEvent {});
-        player_take_damage_event_writer.send(PlayerTakeDamageEvent {});
+        let fuel_loss_amount = player_info.counter_attack_fuel_loss;
+        change_player_fuel(&mut player_info, fuel_loss_amount);
 
         // Heal enemy
         if let Ok(mut enemy_struct) =
