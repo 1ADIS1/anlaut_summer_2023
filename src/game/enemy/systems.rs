@@ -1,9 +1,8 @@
 use super::components::*;
 use super::resources::EnemySpawnTimer;
-use super::{
-    ENEMY_COUNTER_ATTACK_HEAL, ENEMY_COUNTER_STATE_HEALTH, ENEMY_MAX_HEALTH, ENEMY_SPEED,
-    ENEMY_SPRITE_SIZE,
-};
+use super::{ENEMY_COUNTER_ATTACK_HEAL, ENEMY_COUNTER_STATE_HEALTH, ENEMY_MAX_HEALTH, ENEMY_SPEED};
+use crate::game::components::Collider;
+use crate::game::enemy::ENEMY_COLLIDER_SIZE;
 use crate::game::events::{EnemyCounterAttackEvent, EnemyTakeDamageEvent};
 use crate::game::player::components::Player;
 use crate::game::player::{
@@ -27,16 +26,15 @@ pub fn spawn_enemies_over_timer(
 ) {
     if enemy_timer.timer.just_finished() {
         let primary_window = window_query.get_single().unwrap();
-        let enemy_radius = ENEMY_SPRITE_SIZE / 2.0;
 
         let enemy_starting_position = Vec3::new(
-            random::<f32>() * (primary_window.width() - enemy_radius),
-            0.0 - enemy_radius,
+            random::<f32>() * (primary_window.width() - ENEMY_COLLIDER_SIZE.x),
+            0.0 - ENEMY_COLLIDER_SIZE.y,
             0.0,
         );
         let enemy_destination = Vec3::new(
-            random::<f32>() * (primary_window.width() - enemy_radius),
-            0.0 + enemy_radius + random::<f32>() * enemy_radius,
+            random::<f32>() * (primary_window.width() - ENEMY_COLLIDER_SIZE.x),
+            0.0 + ENEMY_COLLIDER_SIZE.y + random::<f32>() * ENEMY_COLLIDER_SIZE.y,
             0.0,
         );
         let enemy_direction = (enemy_destination - enemy_starting_position).normalize();
@@ -51,6 +49,9 @@ pub fn spawn_enemies_over_timer(
             Enemy {
                 max_hp: ENEMY_MAX_HEALTH,
                 current_hp: ENEMY_MAX_HEALTH,
+                collider: Collider {
+                    size: ENEMY_COLLIDER_SIZE,
+                },
                 counter_state_health_threshold: ENEMY_COUNTER_STATE_HEALTH,
                 enemy_counter_attack_heal: ENEMY_COUNTER_ATTACK_HEAL,
                 speed: ENEMY_SPEED,
@@ -94,16 +95,16 @@ pub fn limit_enemy_movement_in_engaging_state(
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
     let primary_window = window_query.get_single().unwrap();
-    let enemy_radius = ENEMY_SPRITE_SIZE / 2.0;
-    let min_x = 0.0 + enemy_radius;
-    let max_x = primary_window.width() - enemy_radius;
-    let min_y = 0.0 + enemy_radius;
-    let max_y = primary_window.height() - enemy_radius;
 
     for (mut enemy_transform, enemy) in enemies_query.iter_mut() {
         if enemy.state != EnemyState::Engaging {
             return;
         }
+
+        let min_x = 0.0 + enemy.collider.size.x;
+        let max_x = primary_window.width() - enemy.collider.size.x;
+        let min_y = 0.0 + enemy.collider.size.y;
+        let max_y = primary_window.height() - enemy.collider.size.y;
 
         if enemy_transform.translation.x < min_x {
             enemy_transform.translation.x = min_x;

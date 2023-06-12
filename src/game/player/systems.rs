@@ -3,20 +3,18 @@ use super::resources::PlayerDamageInvulnerabilityTimer;
 use super::{PlayerInfo, PlayerState};
 use super::{
     CONSTANT_PLAYER_FUEL_GAIN_AMOUNT, CONSTANT_PLAYER_FUEL_GAIN_SPEED, PLAYER_CHAINSAW_SPEED,
-    PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_REGULAR_SPEED, PLAYER_SPRITE_SIZE,
+    PLAYER_COLLIDER_SIZE, PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_REGULAR_SPEED,
 };
-use crate::game::components::{FuelPickup, HealthPickup};
+use crate::game::components::{Collider, FuelPickup, HealthPickup, Pickup};
 use crate::game::enemy::components::Enemy;
-use crate::game::enemy::ENEMY_SPRITE_SIZE;
 use crate::game::events::{
     EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent, PlayerTransitionToRegularFormEvent,
 };
 use crate::game::GameInfo;
-use crate::game::{
-    CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE, HEALTH_PICKUP_RESTORE, PICKUP_SPRITE_SIZE,
-};
+use crate::game::{CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE, HEALTH_PICKUP_RESTORE};
 
 use bevy::prelude::*;
+use bevy::sprite::collide_aabb::*;
 use bevy::window::PrimaryWindow;
 
 pub fn spawn_player(
@@ -33,11 +31,14 @@ pub fn spawn_player(
                 primary_window.height() / 2.0,
                 0.0,
             ),
-            texture: asset_server.load("sprites/player.png"),
+            texture: asset_server.load("sprites/player_falling.png"),
             ..default()
         },
         Player {
             current_speed: PLAYER_REGULAR_SPEED,
+            collider: Collider {
+                size: PLAYER_COLLIDER_SIZE,
+            },
         },
     ));
 }
@@ -111,21 +112,19 @@ pub fn gain_fuel_over_time(mut player_info: ResMut<PlayerInfo>, time: Res<Time>)
 pub fn check_player_pickup_collision(
     mut commands: Commands,
     mut player_info: ResMut<PlayerInfo>,
-    player_query: Query<&Transform, With<Player>>,
-    fuel_query: Query<(Entity, &Transform), With<FuelPickup>>,
-    health_query: Query<(Entity, &Transform), With<HealthPickup>>,
+    player_query: Query<(&Transform, &Player)>,
+    fuel_query: Query<(Entity, &Transform, &Pickup), With<FuelPickup>>,
+    health_query: Query<(Entity, &Transform, &Pickup), With<HealthPickup>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
-        let player_radius = PLAYER_SPRITE_SIZE / 2.0;
-        let pickup_radius = PICKUP_SPRITE_SIZE / 2.0;
-
-        for (fuel_entity, fuel_transform) in fuel_query.iter() {
-            if player_transform
-                .translation
-                .distance(fuel_transform.translation)
-                < player_radius + pickup_radius
-            {
-                // Collided with fuel
+    if let Ok((player_transform, player_struct)) = player_query.get_single() {
+        for (fuel_entity, fuel_transform, fuel_struct) in fuel_query.iter() {
+            // If collided with fuel
+            if let Some(_) = collide(
+                player_transform.translation,
+                player_struct.collider.size,
+                fuel_transform.translation,
+                fuel_struct.collider.size,
+            ) {
                 player_info.current_fuel =
                     if PLAYER_FUEL_CAPACITY < player_info.current_fuel + FUEL_PICKUP_RESTORE {
                         PLAYER_FUEL_CAPACITY
@@ -136,12 +135,14 @@ pub fn check_player_pickup_collision(
             }
         }
 
-        for (health_entity, health_transform) in health_query.iter() {
-            if player_transform
-                .translation
-                .distance(health_transform.translation)
-                < player_radius + pickup_radius
-            {
+        for (health_entity, health_transform, health_struct) in health_query.iter() {
+            // If collided with heart
+            if let Some(_) = collide(
+                player_transform.translation,
+                player_struct.collider.size,
+                health_transform.translation,
+                health_struct.collider.size,
+            ) {
                 // Collided with health
                 player_info.current_hp =
                     if PLAYER_MAX_HEALTH < player_info.current_hp + HEALTH_PICKUP_RESTORE {
@@ -158,21 +159,19 @@ pub fn check_player_pickup_collision(
 pub fn check_player_enemy_collision(
     mut player_take_damage_event_writer: EventWriter<PlayerTakeDamageEvent>,
     mut enemy_take_damage_event_writer: EventWriter<EnemyTakeDamageEvent>,
-    mut enemies_query: Query<(&Transform, Entity), With<Enemy>>,
-    player_query: Query<&Transform, With<Player>>,
+    mut enemies_query: Query<(&Transform, Entity, &Enemy)>,
+    player_query: Query<(&Transform, &Player)>,
     player_state: Res<State<PlayerState>>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
-        let player_radius = PLAYER_SPRITE_SIZE / 2.0;
-        let enemy_radius = ENEMY_SPRITE_SIZE / 2.0;
-
-        for (enemy_transform, enemy_entity) in enemies_query.iter_mut() {
-            // Player has collided with enemy
-            if player_transform
-                .translation
-                .distance(enemy_transform.translation)
-                < player_radius + enemy_radius
-            {
+    if let Ok((player_transform, player_struct)) = player_query.get_single() {
+        for (enemy_transform, enemy_entity, enemy_struct) in enemies_query.iter_mut() {
+            // If collided with enemy
+            if let Some(_) = collide(
+                player_transform.translation,
+                player_struct.collider.size,
+                enemy_transform.translation,
+                enemy_struct.collider.size,
+            ) {
                 // Check in which state player is
                 match player_state.0 {
                     PlayerState::REGULAR => {
@@ -211,16 +210,15 @@ pub fn move_player(
 }
 
 pub fn limit_player_movement(
-    mut player_query: Query<&mut Transform, With<Player>>,
+    mut player_query: Query<(&mut Transform, &Player)>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    if let Ok(mut player_transform) = player_query.get_single_mut() {
+    if let Ok((mut player_transform, player_struct)) = player_query.get_single_mut() {
         let primary_window = window_query.get_single().unwrap();
-        let player_radius = PLAYER_SPRITE_SIZE / 2.0;
-        let x_max = primary_window.width() - player_radius;
-        let x_min = 0.0 + player_radius;
-        let y_max = primary_window.height() - player_radius;
-        let y_min = 0.0 + player_radius;
+        let x_max = primary_window.width() - player_struct.collider.size.x;
+        let x_min = 0.0 + player_struct.collider.size.x;
+        let y_max = primary_window.height() - player_struct.collider.size.y;
+        let y_min = 0.0 + player_struct.collider.size.y;
 
         if player_transform.translation.x > x_max {
             player_transform.translation.x = x_max;

@@ -6,10 +6,17 @@ pub struct ParallaxBackground {
 }
 
 #[derive(Component)]
+pub struct Collider {
+    pub size: Vec2,
+}
+
+#[derive(Component)]
 pub struct MainCamera;
 
 #[derive(Component)]
-pub struct Pickup;
+pub struct Pickup {
+    pub collider: Collider,
+}
 
 #[derive(Component)]
 pub struct FuelPickup;

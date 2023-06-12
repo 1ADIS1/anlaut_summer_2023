@@ -10,7 +10,10 @@ use bevy::prelude::*;
 
 pub const PLAYER_MAX_HEALTH: usize = 5;
 pub const PLAYER_FUEL_CAPACITY: f32 = 100.0;
-const PLAYER_SPRITE_SIZE: f32 = 64.0;
+
+const PLAYER_SPRITE_SIZE: Vec2 = Vec2::new(38.0, 56.0);
+const PLAYER_COLLIDER_SIZE: Vec2 = Vec2::new(23.0, 53.0);
+
 const PLAYER_TAKE_DAMAGE_INVULNERABILITY_PERIOD: f32 = 2.0;
 pub const PLAYER_DAMAGE: usize = 1;
 pub const PLAYER_DAMAGE_SPEED: f32 = 30.0;

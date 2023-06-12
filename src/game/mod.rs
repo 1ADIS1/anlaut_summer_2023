@@ -15,7 +15,11 @@ const PICKUP_SPEED: f32 = 100.0;
 
 const PICKUP_SPAWN_PERIOD: f32 = 1.0;
 
-const PICKUP_SPRITE_SIZE: f32 = 64.0;
+const FUEL_PICKUP_SPRITE_SIZE: Vec2 = Vec2::new(64.0, 64.0);
+const FUEL_PICKUP_COLLIDER_SIZE: Vec2 = Vec2::new(64.0, 64.0);
+
+const HEALTH_PICKUP_SPRITE_SIZE: Vec2 = Vec2::new(64.0, 64.0);
+const HEALTH_PICKUP_COLLIDER_SIZE: Vec2 = Vec2::new(64.0, 64.0);
 
 const FUEL_PICKUP_RESTORE: f32 = 25.0;
 const HEALTH_PICKUP_RESTORE: usize = 1;

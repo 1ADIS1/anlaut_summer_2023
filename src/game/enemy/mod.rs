@@ -10,7 +10,10 @@ use bevy::prelude::*;
 
 const ENEMY_SPEED: f32 = 85.0;
 const ENEMY_SPAWN_PERIOD: f32 = 3.0;
-pub const ENEMY_SPRITE_SIZE: f32 = 64.0;
+
+pub const ENEMY_SPRITE_SIZE: Vec2 = Vec2::new(64.0, 64.0);
+const ENEMY_COLLIDER_SIZE: Vec2 = Vec2::new(64.0, 64.0);
+
 const ENEMY_MAX_HEALTH: f32 = 10.0;
 // When does enemy goes to counter attack state
 const ENEMY_COUNTER_STATE_HEALTH: f32 = 5.0;

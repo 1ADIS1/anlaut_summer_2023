@@ -1,9 +1,13 @@
+use crate::game::components::Collider;
+
 use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct Enemy {
     pub max_hp: f32,
     pub current_hp: f32,
+    pub collider: Collider,
+
     pub counter_state_health_threshold: f32,
     pub enemy_counter_attack_heal: f32,
     pub speed: f32,

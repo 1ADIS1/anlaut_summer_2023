@@ -8,7 +8,10 @@ use super::player::components::Player;
 use super::player::resources::PlayerInfo;
 use super::CounterAttackTimer;
 use super::{GameInfo, GameState, PickupSpawnTimer};
-use super::{PARALLAX_SPEED, PICKUP_SPEED, PICKUP_SPRITE_SIZE};
+use super::{
+    FUEL_PICKUP_COLLIDER_SIZE, FUEL_PICKUP_SPRITE_SIZE, HEALTH_PICKUP_COLLIDER_SIZE,
+    HEALTH_PICKUP_SPRITE_SIZE, PARALLAX_SPEED, PICKUP_SPEED,
+};
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -21,7 +24,7 @@ pub fn spawn_parallax_background(
 ) {
     let primary_window = window_query.get_single().unwrap();
 
-    let bg_size = Vec2::new(320.0 * 3.0, 180.0 * 3.0);
+    let bg_size = Vec2::new(260.0, 320.0);
 
     // Top background. Spawn it at the center of the screen.
     commands.spawn((
@@ -49,7 +52,7 @@ pub fn spawn_parallax_background(
                 -(primary_window.height() / 2.0),
                 -1.0,
             ),
-            texture: asset_server.load("sprites/bg1.png"),
+            texture: asset_server.load("sprites/bg2.png"),
             sprite: Sprite {
                 custom_size: Some(bg_size),
                 ..default()
@@ -86,17 +89,36 @@ pub fn move_parallax_background(
 pub fn spawn_camera(mut commands: Commands, window_query: Query<&Window, With<PrimaryWindow>>) {
     let primary_window = window_query.get_single().unwrap();
 
-    commands.spawn((
-        Camera2dBundle {
-            transform: Transform::from_xyz(
-                primary_window.width() / 2.0,
-                primary_window.height() / 2.0,
-                0.0,
-            ),
-            ..default()
-        },
-        MainCamera {},
-    ));
+    // commands.spawn((
+    //     Camera2dBundle {
+    //         transform: Transform::from_xyz(
+    //             primary_window.width() / 2.0,
+    //             primary_window.height() / 2.0,
+    //             0.0,
+    //         ),
+    //         ..default()
+    //     },
+    //     MainCamera {},
+    // ));
+
+    commands.spawn({
+        let mut bundle = (
+            Camera2dBundle {
+                transform: Transform::from_xyz(
+                    primary_window.width() / 2.0,
+                    primary_window.height() / 2.0,
+                    0.0,
+                ),
+                ..default()
+            },
+            MainCamera {},
+        );
+        bundle.0.projection.scaling_mode =
+            bevy::render::camera::ScalingMode::FixedHorizontal(260.0);
+        // bundle.0.projection.scaling_mode = bevy::render::camera::ScalingMode::WindowSize(1.0);
+        // bundle.0.transform.scale = Vec3::new(1., 1., 1.);
+        bundle
+    });
 }
 
 // Function that spawns randowm pickups over time at the y = 0, and random x.
@@ -125,14 +147,18 @@ pub fn spawn_fuel_bundle(
     commands.spawn((
         SpriteBundle {
             transform: Transform::from_xyz(
-                random::<f32>() * primary_window.width(),
-                0.0 - PICKUP_SPRITE_SIZE,
+                random::<f32>() * (primary_window.width() - FUEL_PICKUP_SPRITE_SIZE.x),
+                0.0 - FUEL_PICKUP_SPRITE_SIZE.y,
                 0.0,
             ),
             texture: asset_server.load("sprites/fuel.png"),
             ..default()
         },
-        Pickup {},
+        Pickup {
+            collider: Collider {
+                size: FUEL_PICKUP_COLLIDER_SIZE,
+            },
+        },
         FuelPickup {},
     ));
 }
@@ -145,14 +171,18 @@ pub fn spawn_health_bundle(
     commands.spawn((
         SpriteBundle {
             transform: Transform::from_xyz(
-                random::<f32>() * primary_window.width(),
-                0.0 - PICKUP_SPRITE_SIZE,
+                random::<f32>() * (primary_window.width() - HEALTH_PICKUP_SPRITE_SIZE.x),
+                0.0 - HEALTH_PICKUP_SPRITE_SIZE.y,
                 0.0,
             ),
             texture: asset_server.load("sprites/health.png"),
             ..default()
         },
-        Pickup {},
+        Pickup {
+            collider: Collider {
+                size: HEALTH_PICKUP_COLLIDER_SIZE,
+            },
+        },
         HealthPickup {},
     ));
 }
@@ -174,13 +204,14 @@ pub fn move_pickups_vertically(
 // When pickups go off the screen, despawn them
 pub fn despawn_pickups(
     mut commands: Commands,
-    pickups_query: Query<(Entity, &Transform), With<Pickup>>,
+    pickups_query: Query<(Entity, &Transform, &Pickup)>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
     let primary_window = window_query.get_single().unwrap();
 
-    for (pickup_entity, pickup_transform) in pickups_query.iter() {
-        if pickup_transform.translation.y > primary_window.height() + PICKUP_SPRITE_SIZE {
+    for (pickup_entity, pickup_transform, pickup_struct) in pickups_query.iter() {
+        if pickup_transform.translation.y > primary_window.height() + pickup_struct.collider.size.y
+        {
             commands.entity(pickup_entity).despawn();
         }
     }
