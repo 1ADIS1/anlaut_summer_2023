@@ -24,7 +24,7 @@ pub fn spawn_parallax_background(
 ) {
     let primary_window = window_query.get_single().unwrap();
 
-    let bg_size = Vec2::new(260.0, 320.0);
+    let bg_size = Vec2::new(260.0 * 2.0, 320.0 * 2.0);
 
     // Top background. Spawn it at the center of the screen.
     commands.spawn((
@@ -113,8 +113,8 @@ pub fn spawn_camera(mut commands: Commands, window_query: Query<&Window, With<Pr
             },
             MainCamera {},
         );
-        bundle.0.projection.scaling_mode =
-            bevy::render::camera::ScalingMode::FixedHorizontal(260.0);
+        // bundle.0.projection.scaling_mode =
+        // bevy::render::camera::ScalingMode::FixedHorizontal(260.0);
         // bundle.0.projection.scaling_mode = bevy::render::camera::ScalingMode::WindowSize(1.0);
         // bundle.0.transform.scale = Vec3::new(1., 1., 1.);
         bundle

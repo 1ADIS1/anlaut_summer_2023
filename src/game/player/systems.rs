@@ -80,7 +80,7 @@ pub fn transition_to_player_regular_state(
     for _ in player_transition_to_regular_form_event_reader.iter() {
         if let Ok((mut player_texture, mut player)) = player_query.get_single_mut() {
             next_player_state.set(PlayerState::REGULAR);
-            *player_texture = asset_server.load("sprites/player.png");
+            *player_texture = asset_server.load("sprites/player_falling.png");
             player.current_speed = PLAYER_REGULAR_SPEED;
             println!("Returned back to regular form!");
         }
