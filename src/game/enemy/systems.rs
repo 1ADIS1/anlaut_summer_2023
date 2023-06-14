@@ -5,7 +5,8 @@ use crate::game::components::{Collider, Projectile};
 use crate::game::events::{ChainsawFireWave, EnemyTakeDamageEvent};
 use crate::game::player::components::Player;
 use crate::game::player::{
-    PlayerState, CHAINSAW_ENEMY_SLOW_DOWN_FACTOR, PLAYER_DAMAGE, PLAYER_DAMAGE_SPEED,
+    PlayerState, CHAINSAW_ENEMY_SLOW_DOWN_FACTOR, PLAYER_CHAINSAW_COLLIDER_SIZE, PLAYER_DAMAGE,
+    PLAYER_DAMAGE_SPEED,
 };
 use crate::game::{GameInfo, MAX_ENEMIES_NUM};
 
@@ -25,7 +26,7 @@ pub fn spawn_enemies_over_time(
     enemy_timer: Res<EnemySpawnTimer>,
 ) {
     if enemy_timer.timer.just_finished() {
-        if game_info.enemies_num >= MAX_ENEMIES_NUM {
+        if game_info.enemies_num >= MAX_ENEMIES_NUM || game_info.is_boss_spawned {
             return;
         }
 
@@ -34,10 +35,14 @@ pub fn spawn_enemies_over_time(
         let mut rng = thread_rng();
 
         let player_progress = game_info.player_progress;
+        let enemies_num = game_info.enemies_num;
+
         game_info.enemies_num += 1;
         game_info
             .enemies_spawn_queue
-            .push_back(if player_progress >= SHOOTER_DEPTH_LEVEL {
+            .push_back(if player_progress >= BOSS_DEPTH_LEVEL {
+                EnemyType::Boss
+            } else if player_progress >= SHOOTER_DEPTH_LEVEL {
                 if rng.gen::<f32>() > 0.4 {
                     EnemyType::Shooter
                 } else {
@@ -46,6 +51,10 @@ pub fn spawn_enemies_over_time(
             } else {
                 EnemyType::Follower
             });
+
+        if game_info.enemies_spawn_queue.back() == Some(&EnemyType::Boss) {
+            game_info.is_boss_spawned = true;
+        }
 
         // === Shooter ===
         if game_info.enemies_spawn_queue.front().unwrap() == &EnemyType::Shooter {
@@ -145,6 +154,61 @@ pub fn spawn_enemies_over_time(
                 FollowAI {},
             ));
         }
+        // === Boss ===
+        else if game_info.enemies_spawn_queue.front().unwrap() == &EnemyType::Boss {
+            let speed: f32 = rng.gen_range(ENEMY_RANGE_SPEED) * BOSS_MOVEMENT_SPEED;
+
+            let enemy_starting_position = Vec3::new(
+                primary_window.width() / 2.0,
+                0.0 - BOSS_COLLIDER_SIZE.y,
+                0.0,
+            );
+            let enemy_destination = Vec3::new(
+                primary_window.width() / 2.0,
+                primary_window.height() / 2.0,
+                0.0,
+            );
+            let enemy_direction = (enemy_destination - enemy_starting_position).normalize();
+
+            commands.spawn((
+                SpriteBundle {
+                    transform: Transform::from_translation(enemy_starting_position),
+                    texture: asset_server.load("sprites/shooter_default.png"),
+                    sprite: Sprite {
+                        custom_size: Some(BOSS_SPRITE_SIZE),
+                        ..default()
+                    },
+                    ..default()
+                },
+                Enemy {
+                    max_hp: BOSS_HEALTH,
+                    current_hp: BOSS_HEALTH,
+
+                    current_speed: speed,
+                    default_speed: speed,
+
+                    enemy_type: EnemyType::Boss,
+                    depth_level: BOSS_DEPTH_LEVEL,
+
+                    collider: Collider {
+                        size: BOSS_COLLIDER_SIZE,
+                    },
+                    state: EnemyState::Spawned,
+
+                    direction: enemy_direction,
+                    destination: enemy_destination,
+
+                    destination_reached: false,
+                    is_green_decreasing: false,
+                },
+                FireTimer::default(),
+                ShooterAI {
+                    max_distance_from_player: BOSS_DISTANCE_FROM_PLAYER,
+                    reload_speed: BOSS_RELOAD_SPEED,
+                    reload_timer: Timer::from_seconds(BOSS_RELOAD_SPEED, TimerMode::Once),
+                },
+            ));
+        }
 
         game_info.enemies_spawn_queue.pop_front();
     }
@@ -206,10 +270,10 @@ pub fn limit_enemy_movement(
             continue;
         }
 
-        let min_x = 0.0 + enemy_struct.collider.size.x;
-        let max_x = primary_window.width() - enemy_struct.collider.size.x;
-        let min_y = 0.0 + enemy_struct.collider.size.y;
-        let max_y = primary_window.height() - enemy_struct.collider.size.y;
+        let min_x = 0.0 + PLAYER_CHAINSAW_COLLIDER_SIZE.x;
+        let max_x = primary_window.width() - PLAYER_CHAINSAW_COLLIDER_SIZE.x;
+        let min_y = 0.0 + PLAYER_CHAINSAW_COLLIDER_SIZE.y;
+        let max_y = primary_window.height() - PLAYER_CHAINSAW_COLLIDER_SIZE.y;
 
         if enemy_struct.state == EnemyState::OnFire {
             if enemy_transform.translation.x < min_x || enemy_transform.translation.x > max_x {
@@ -240,10 +304,9 @@ pub fn limit_enemy_movement(
 pub fn follow_player(
     mut enemies_query: Query<(&Transform, &mut Enemy), With<FollowAI>>,
     player_query: Query<&Transform, With<Player>>,
-    player_state: Res<State<PlayerState>>,
 ) {
     if let Ok(player_transform) = player_query.get_single() {
-        for (enemy_transform, mut enemy_struct) in enemies_query.iter_mut() {
+        for (_, mut enemy_struct) in enemies_query.iter_mut() {
             if enemy_struct.state != EnemyState::Engaging {
                 continue;
             }
@@ -283,26 +346,47 @@ pub fn handle_shooter_ai(
 
             // shoot projectile
             if shooter_struct.reload_timer.just_finished() {
-                commands.spawn((
-                    SpriteBundle {
-                        transform: Transform::from_translation(enemy_transform.translation),
-                        texture: asset_server.load("sprites/projectile.png"),
-                        sprite: Sprite {
-                            custom_size: Some(SHOOTER_PROJECTILE_SIZE),
+                if enemy_struct.enemy_type == EnemyType::Boss {
+                    commands.spawn((
+                        SpriteBundle {
+                            transform: Transform::from_translation(enemy_transform.translation),
+                            texture: asset_server.load("sprites/projectile.png"),
+                            sprite: Sprite {
+                                custom_size: Some(BOSS_PROJECTILE_SIZE),
+                                ..default()
+                            },
                             ..default()
                         },
-                        ..default()
-                    },
-                    Projectile {
-                        speed: SHOOTER_PROJECTILE_SPEED,
-                        direction: (player_transform.translation - enemy_transform.translation)
-                            .normalize(),
-                        collider: Collider {
-                            size: SHOOTER_PROJECTILE_COLLIDER_SIZE,
+                        Projectile {
+                            speed: BOSS_PROJECTILE_SPEED,
+                            direction: (player_transform.translation - enemy_transform.translation)
+                                .normalize(),
+                            collider: Collider {
+                                size: BOSS_PROJECTILE_COLLIDER_SIZE,
+                            },
                         },
-                    },
-                ));
-
+                    ));
+                } else {
+                    commands.spawn((
+                        SpriteBundle {
+                            transform: Transform::from_translation(enemy_transform.translation),
+                            texture: asset_server.load("sprites/projectile.png"),
+                            sprite: Sprite {
+                                custom_size: Some(SHOOTER_PROJECTILE_SIZE),
+                                ..default()
+                            },
+                            ..default()
+                        },
+                        Projectile {
+                            speed: SHOOTER_PROJECTILE_SPEED,
+                            direction: (player_transform.translation - enemy_transform.translation)
+                                .normalize(),
+                            collider: Collider {
+                                size: SHOOTER_PROJECTILE_COLLIDER_SIZE,
+                            },
+                        },
+                    ));
+                }
                 shooter_struct.reload_timer.reset();
             }
         }
@@ -314,17 +398,39 @@ pub fn handle_enemy_take_damage_event(
     mut enemy_take_damage_event_reader: EventReader<EnemyTakeDamageEvent>,
     mut enemies_query: Query<&mut Enemy>,
     mut game_info: ResMut<GameInfo>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
     time: Res<Time>,
+    asset_server: Res<AssetServer>,
 ) {
     for enemy_damage_event in enemy_take_damage_event_reader.iter() {
         // Check if Enemy component exists on the entity from EnemyTakeDamageEvent
         // (it should definitely exists, but better to check twice)
         if let Ok(mut enemy_struct) = enemies_query.get_mut(enemy_damage_event.enemy_entity) {
             if enemy_struct.current_hp <= 0.0 {
-                commands.entity(enemy_damage_event.enemy_entity).despawn();
-
                 let enemies_num = game_info.enemies_num;
                 game_info.enemies_num = if enemies_num != 0 { enemies_num - 1 } else { 0 };
+
+                if enemy_struct.enemy_type == EnemyType::Boss {
+                    let primary_window = window_query.get_single().unwrap();
+
+                    println!("Spawned end screen");
+
+                    commands.spawn(SpriteBundle {
+                        transform: Transform::from_xyz(
+                            primary_window.width() / 2.,
+                            primary_window.height() / 2.,
+                            0.0,
+                        ),
+                        texture: asset_server.load("sprites/end_screen.png"),
+                        sprite: Sprite {
+                            custom_size: Some(Vec2::new(260. * 2., 320. * 2.)),
+                            ..default()
+                        },
+                        ..default()
+                    });
+                }
+
+                commands.entity(enemy_damage_event.enemy_entity).despawn();
             } else {
                 // Drain enemy's hp and slow it down
                 enemy_struct.current_hp -=

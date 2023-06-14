@@ -1,12 +1,13 @@
 use super::components::*;
 use super::events::*;
 use super::player::components::Player;
+use super::player::PLAYER_CHAINSAW_COLLIDER_SIZE;
 use super::BACKGROUND_LIGHTNESS;
 use super::HEALTH_SPAWN_CHANCE;
 use super::{GameInfo, GameState, PickupSpawnTimer};
 use super::{
     FUEL_PICKUP_COLLIDER_SIZE, FUEL_PICKUP_SPRITE_SIZE, HEALTH_PICKUP_COLLIDER_SIZE,
-    HEALTH_PICKUP_SPRITE_SIZE, PARALLAX_SPEED, PICKUP_SPEED,
+    PARALLAX_SPEED, PICKUP_SPEED,
 };
 
 use bevy::prelude::*;
@@ -94,6 +95,11 @@ pub fn move_parallax_background(
     }
 }
 
+pub fn play_music(audio: Res<Audio>, asset_server: Res<AssetServer>) {
+    let bg_music = asset_server.load("audio/FuelsawFall.ogg");
+    audio.play_with_settings(bg_music, PlaybackSettings::LOOP);
+}
+
 pub fn handle_projectiles(
     mut commands: Commands,
     mut projectiles_query: Query<(Entity, &mut Transform, &Projectile)>,
@@ -142,7 +148,7 @@ pub fn spawn_camera(mut commands: Commands, window_query: Query<&Window, With<Pr
                 transform: Transform::from_xyz(
                     primary_window.width() / 2.0,
                     primary_window.height() / 2.0,
-                    0.0,
+                    5.0,
                 ),
                 ..default()
             },
@@ -182,11 +188,15 @@ pub fn spawn_fuel_bundle(
     commands.spawn((
         SpriteBundle {
             transform: Transform::from_xyz(
-                random::<f32>() * (primary_window.width() - FUEL_PICKUP_SPRITE_SIZE.x),
-                0.0 - FUEL_PICKUP_SPRITE_SIZE.y,
+                random::<f32>() * (primary_window.width() - PLAYER_CHAINSAW_COLLIDER_SIZE.x),
+                0.0 - PLAYER_CHAINSAW_COLLIDER_SIZE.y,
                 0.0,
             ),
             texture: asset_server.load("sprites/fuel.png"),
+            sprite: Sprite {
+                custom_size: Some(FUEL_PICKUP_SPRITE_SIZE),
+                ..default()
+            },
             ..default()
         },
         Pickup {
@@ -206,8 +216,8 @@ pub fn spawn_health_bundle(
     commands.spawn((
         SpriteBundle {
             transform: Transform::from_xyz(
-                random::<f32>() * (primary_window.width() - HEALTH_PICKUP_SPRITE_SIZE.x),
-                0.0 - HEALTH_PICKUP_SPRITE_SIZE.y,
+                random::<f32>() * (primary_window.width() - PLAYER_CHAINSAW_COLLIDER_SIZE.x),
+                0.0 - PLAYER_CHAINSAW_COLLIDER_SIZE.y,
                 0.0,
             ),
             texture: asset_server.load("sprites/health.png"),

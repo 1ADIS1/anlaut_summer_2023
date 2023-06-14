@@ -20,10 +20,9 @@ const PICKUP_SPEED: f32 = 100.0;
 const PICKUP_SPAWN_PERIOD: f32 = 5.;
 const HEALTH_SPAWN_CHANCE: f32 = 0.4;
 
-const FUEL_PICKUP_SPRITE_SIZE: Vec2 = Vec2::new(64.0, 64.0);
-const FUEL_PICKUP_COLLIDER_SIZE: Vec2 = Vec2::new(64.0, 64.0);
+const FUEL_PICKUP_SPRITE_SIZE: Vec2 = Vec2::new(19.0 * 1.5, 27.0 * 1.5);
+const FUEL_PICKUP_COLLIDER_SIZE: Vec2 = Vec2::new(19.0 * 1.5, 27.0 * 1.5);
 
-const HEALTH_PICKUP_SPRITE_SIZE: Vec2 = Vec2::new(64.0, 64.0);
 const HEALTH_PICKUP_COLLIDER_SIZE: Vec2 = Vec2::new(64.0, 64.0);
 
 const FUEL_PICKUP_RESTORE: f32 = 25.0;
@@ -51,6 +50,7 @@ impl Plugin for GamePlugin {
             .init_resource::<PickupSpawnTimer>()
             // Run these upon start of the game
             .add_startup_system(spawn_camera)
+            .add_startup_system(play_music)
             .add_system(spawn_parallax_background.in_schedule(OnExit(GameState::MainMenu)))
             // Run these while the game is running
             .add_systems(
@@ -84,6 +84,7 @@ pub struct GameInfo {
     pub player_progress: f32,
     pub enemies_num: usize,
     pub enemies_spawn_queue: VecDeque<EnemyType>,
+    pub is_boss_spawned: bool,
 }
 
 #[derive(Resource)]

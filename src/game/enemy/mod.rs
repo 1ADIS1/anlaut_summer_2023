@@ -27,6 +27,18 @@ const SHOOTER_PROJECTILE_SPEED: f32 = 180.0;
 const SHOOTER_PROJECTILE_SIZE: Vec2 = Vec2::new(39.2, 39.2);
 const SHOOTER_PROJECTILE_COLLIDER_SIZE: Vec2 = Vec2::new(32., 32.);
 
+// === Boss ===
+const BOSS_MOVEMENT_SPEED: f32 = 50.0;
+const BOSS_HEALTH: f32 = 300.;
+const BOSS_RELOAD_SPEED: f32 = 0.75;
+const BOSS_DISTANCE_FROM_PLAYER: f32 = 10.0;
+const BOSS_SPRITE_SIZE: Vec2 = Vec2::new(65. * 3., 61. * 3.);
+const BOSS_COLLIDER_SIZE: Vec2 = Vec2::new(62.0 * 3., 57.0 * 3.);
+const BOSS_DEPTH_LEVEL: f32 = 200.;
+const BOSS_PROJECTILE_SPEED: f32 = 360.0;
+const BOSS_PROJECTILE_SIZE: Vec2 = Vec2::new(39.2 * 2., 39.2 * 2.);
+const BOSS_PROJECTILE_COLLIDER_SIZE: Vec2 = Vec2::new(32. * 2., 32. * 2.);
+
 const FIRE_DURATION: f32 = 4.0;
 const ENEMY_ON_FIRE_SPEED_GAIN: f32 = 50.0;
 const FIRE_COLOR_SPEED: f32 = 17.5;
@@ -63,4 +75,5 @@ impl Plugin for EnemyPlugin {
 pub enum EnemyType {
     Follower,
     Shooter,
+    Boss,
 }

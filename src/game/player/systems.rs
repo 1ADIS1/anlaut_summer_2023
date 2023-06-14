@@ -290,12 +290,11 @@ pub fn move_player(
 
 pub fn update_player_progress(mut game_info: ResMut<GameInfo>, time: Res<Time>) {
     if game_info.player_progress >= MAX_DEPTH {
-        println!("Player has reached maximum depth!");
         return;
     }
 
     game_info.player_progress += PLAYER_FALLING_SPEED * time.delta_seconds();
-    println!("Current depth: {}", game_info.player_progress);
+    println!("{}", game_info.player_progress);
 }
 
 pub fn limit_player_movement(
