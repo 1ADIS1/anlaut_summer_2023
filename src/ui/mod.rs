@@ -17,12 +17,8 @@ impl Plugin for UIPlugin {
             despawn_main_menu.in_schedule(OnExit(GameState::MainMenu)),
             interact_with_play_button.run_if(in_state(GameState::MainMenu)),
             spawn_game_ui.in_schedule(OnExit(GameState::MainMenu)),
+            update_depth_ui.run_if(in_state(GameState::Running)),
             update_ui_text.run_if(in_state(GameState::Running)),
-            spawn_counter_attack_ui.run_if(in_state(GameState::CounterAttack)),
-            update_counter_attack_timer_text.run_if(in_state(GameState::CounterAttack)),
-            despawn_counter_attack_ui
-                .run_if(in_state(GameState::CounterAttack))
-                .before(spawn_counter_attack_ui),
         ));
     }
 }

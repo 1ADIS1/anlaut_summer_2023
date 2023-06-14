@@ -23,3 +23,10 @@ pub struct FuelPickup;
 
 #[derive(Component)]
 pub struct HealthPickup;
+
+#[derive(Component)]
+pub struct Projectile {
+    pub speed: f32,
+    pub direction: Vec3,
+    pub collider: Collider,
+}

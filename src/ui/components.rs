@@ -4,13 +4,13 @@ use bevy::prelude::*;
 pub struct MainMenu;
 
 #[derive(Component)]
+pub struct DepthBarIcon;
+
+#[derive(Component)]
 pub struct PlayButton;
 
 #[derive(Component)]
 pub struct GameUI;
-
-#[derive(Component)]
-pub struct CounterAttackUI;
 
 #[derive(Component)]
 pub struct FuelText;
@@ -20,6 +20,3 @@ pub struct HealthText;
 
 #[derive(Component)]
 pub struct BloodText;
-
-#[derive(Component)]
-pub struct CounterAttackTimerText;

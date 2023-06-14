@@ -1,13 +1,8 @@
 use super::components::*;
 use super::styles::*;
 use super::{HOVERED_BUTTON_COLOR, NORMAL_BUTTON_COLOR, PRESSED_BUTTON_COLOR};
-use crate::game::events::CounterAttackFailed;
-use crate::game::events::CounterAttackSucceeded;
-use crate::game::events::EnemyCounterAttackEvent;
 use crate::game::player::{PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH};
-use crate::game::CounterAttackTimer;
-use crate::game::COUNTER_ATTACK_DURATION;
-use crate::game::COUNTER_ATTACK_MICE_NUMBER;
+use crate::game::GameInfo;
 use crate::game::{player::resources::PlayerInfo, GameState};
 
 use bevy::prelude::*;
@@ -31,22 +26,15 @@ pub fn update_ui_text(
     }
 }
 
-pub fn update_counter_attack_timer_text(
-    mut counter_attack_timer_text_query: Query<&mut Text, With<CounterAttackTimerText>>,
-    counter_attack_timer: Res<CounterAttackTimer>,
+pub fn update_depth_ui(
+    game_info: Res<GameInfo>,
+    mut depth_bar_icon_query: Query<&mut Style, With<DepthBarIcon>>,
 ) {
-    if counter_attack_timer.is_changed() {
-        if let Ok(mut counter_attack_timer_text) = counter_attack_timer_text_query.get_single_mut()
-        {
-            counter_attack_timer_text.sections[0].value = format!(
-                "{:.4}",
-                counter_attack_timer
-                    .timer
-                    .remaining_secs()
-                    // .floor()
-                    .to_string()
-            );
-        }
+    if game_info.is_changed() {
+        let mut depth_bar_icon = depth_bar_icon_query.get_single_mut().unwrap();
+
+        depth_bar_icon.position.top = Val::Px(game_info.player_progress);
+        // println!("Icon translation: {}", depth_bar_icon.position);
     }
 }
 
@@ -75,45 +63,7 @@ pub fn interact_with_play_button(
 
 pub fn spawn_game_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     build_game_ui(&mut commands, &asset_server);
-}
-
-pub fn spawn_counter_attack_ui(
-    mut commands: Commands,
-    mut enemy_counter_attack_event_reader: EventReader<EnemyCounterAttackEvent>,
-    asset_server: Res<AssetServer>,
-) {
-    for counter_attack_event in enemy_counter_attack_event_reader.iter() {
-        build_counter_attack_ui(
-            &mut commands,
-            &asset_server,
-            &counter_attack_event.keys_to_press,
-            COUNTER_ATTACK_DURATION,
-        );
-        return;
-    }
-}
-
-pub fn despawn_counter_attack_ui(
-    mut commands: Commands,
-    mut counter_attack_event_failed_reader: EventReader<CounterAttackFailed>,
-    mut counter_attack_event_succeeded_reader: EventReader<CounterAttackSucceeded>,
-    counter_attack_ui_query: Query<Entity, With<CounterAttackUI>>,
-) {
-    if let Ok(counter_attack_ui_entity) = counter_attack_ui_query.get_single() {
-        for _ in counter_attack_event_failed_reader.iter() {
-            commands
-                .entity(counter_attack_ui_entity)
-                .despawn_recursive();
-            return;
-        }
-
-        for _ in counter_attack_event_succeeded_reader.iter() {
-            commands
-                .entity(counter_attack_ui_entity)
-                .despawn_recursive();
-            return;
-        }
-    }
+    build_depth_ui(&mut commands, &asset_server);
 }
 
 pub fn spawn_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -126,120 +76,47 @@ pub fn despawn_main_menu(mut commands: Commands, main_menu_query: Query<Entity, 
     }
 }
 
-pub fn build_counter_attack_ui(
-    commands: &mut Commands,
-    asset_server: &Res<AssetServer>,
-    keys_to_press: &Vec<MouseButton>,
-    counter_attack_time: f32,
-) -> Entity {
+pub fn build_depth_ui(commands: &mut Commands, asset_server: &Res<AssetServer>) -> Entity {
+    // ===== Depth bar background =====
     commands
-        .spawn((
-            NodeBundle {
-                style: GAME_HUD_STYLE,
+        .spawn(ImageBundle {
+            style: Style {
+                size: Size::new(Val::Px(25.0 * 2.), Val::Px(128. * 2.)),
+
+                position_type: PositionType::Absolute,
+                position: UiRect {
+                    left: Val::Px(450.),
+                    right: Val::Px(20.),
+                    top: Val::Px(250.),
+                    bottom: Val::Px(250.),
+                },
                 ..default()
             },
-            CounterAttackUI {},
-        ))
+            image: asset_server
+                .load("sprites/progress_bar_background.png")
+                .into(),
+            ..default()
+        })
         .with_children(|parent| {
-            parent
-                .spawn(
-                    // Center UI elements
-                    NodeBundle {
-                        style: CENTER_STYLE,
+            // ===== Depth bar icon =====
+            parent.spawn((
+                ImageBundle {
+                    style: Style {
+                        size: Size::new(Val::Px(22.0 * 2.), Val::Px(19.0 * 2.)),
+                        position_type: PositionType::Absolute,
+                        // margin: UiRect::new(Val::Px(0.), Val::Px(0.), Val::Px(0.), Val::Px(1000.)),
+                        position: UiRect::new(Val::Px(0.), Val::Px(0.), Val::Px(0.), Val::Px(0.)),
                         ..default()
                     },
-                )
-                .with_children(|parent| {
-                    // ===== Counter Attack BG Image =====
-                    parent
-                        .spawn(ImageBundle {
-                            style: Style {
-                                size: Size::new(Val::Px(200.0), Val::Px(106.0)),
-                                margin: UiRect::new(
-                                    Val::Px(8.0),
-                                    Val::Px(8.0),
-                                    Val::Px(32.0),
-                                    Val::Px(8.0),
-                                ),
-                                ..default()
-                            },
-                            image: asset_server.load("sprites/blood_bg.png").into(),
-                            ..default()
-                        })
-                        .with_children(|parent| {
-                            // ===== LMBs and RMBs =====
-                            for i in 0..COUNTER_ATTACK_MICE_NUMBER {
-                                parent.spawn(ImageBundle {
-                                    style: Style {
-                                        size: Size::new(Val::Px(32.0), Val::Px(32.0)),
-                                        margin: UiRect::new(
-                                            Val::Px(8.0),
-                                            Val::Px(8.0),
-                                            Val::Px(8.0),
-                                            Val::Px(8.0),
-                                        ),
-                                        ..default()
-                                    },
-                                    image: if keys_to_press[i] == MouseButton::Left {
-                                        asset_server.load("sprites/LMB.png").into()
-                                    } else {
-                                        asset_server.load("sprites/RMB.png").into()
-                                    },
-                                    ..default()
-                                });
-                            }
-                            // ==== Timer ====
-                            parent.spawn(ImageBundle {
-                                style: Style {
-                                    size: Size::new(Val::Px(32.0), Val::Px(32.0)),
-                                    margin: UiRect::new(
-                                        Val::Px(8.0),
-                                        Val::Px(8.0),
-                                        Val::Px(8.0),
-                                        Val::Px(8.0),
-                                    ),
-                                    ..default()
-                                },
-                                image: asset_server.load("sprites/clock.png").into(),
-                                ..default()
-                            });
-
-                            // ==== Timer text ====
-                            parent.spawn((
-                                TextBundle {
-                                    style: Style {
-                                        margin: UiRect::new(
-                                            Val::Px(8.0),
-                                            Val::Px(8.0),
-                                            Val::Px(8.0),
-                                            Val::Px(8.0),
-                                        ),
-                                        ..default()
-                                    },
-                                    text: Text {
-                                        sections: vec![TextSection::new(
-                                            counter_attack_time.to_string(),
-                                            TextStyle {
-                                                font: asset_server
-                                                    .load("fonts/origami_mommy_regular.ttf"),
-                                                font_size: 32.0,
-                                                color: Color::WHITE,
-                                            },
-                                        )],
-                                        alignment: TextAlignment::Center,
-                                        ..default()
-                                    },
-                                    ..default()
-                                },
-                                CounterAttackTimerText {},
-                            ));
-                        });
-                });
+                    z_index: ZIndex::Local(1),
+                    image: asset_server.load("sprites/progress_bar_icon.png").into(),
+                    ..default()
+                },
+                DepthBarIcon {},
+            ));
         })
         .id()
 }
-
-// pub fn despawn_counter_attack_hud(mut commands: Commands) {}
 
 pub fn build_game_ui(commands: &mut Commands, asset_server: &Res<AssetServer>) -> Entity {
     commands

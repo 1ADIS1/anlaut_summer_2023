@@ -1,17 +1,22 @@
 use super::components::Player;
 use super::resources::PlayerDamageInvulnerabilityTimer;
-use super::{PlayerInfo, PlayerState};
 use super::{
-    CONSTANT_PLAYER_FUEL_GAIN_AMOUNT, CONSTANT_PLAYER_FUEL_GAIN_SPEED, PLAYER_CHAINSAW_SPEED,
-    PLAYER_COLLIDER_SIZE, PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_REGULAR_SPEED,
+    PlayerInfo, PlayerState, CHAINSAW_HEAT_LIMIT, CHAINSAW_HEAT_SPEED,
+    PLAYER_CHAINSAW_COLLIDER_SIZE,
 };
-use crate::game::components::{Collider, FuelPickup, HealthPickup, Pickup};
+use super::{
+    CHAINSAW_FUEL_DRAIN_SPEED, PASSIVE_PLAYER_FUEL_GAIN_AMOUNT, PASSIVE_PLAYER_FUEL_GAIN_SPEED,
+    PLAYER_CHAINSAW_SPEED, PLAYER_FUEL_CAPACITY, PLAYER_MAX_HEALTH, PLAYER_REGULAR_COLLIDER_SIZE,
+    PLAYER_REGULAR_SPEED,
+};
+use crate::game::components::{Collider, FuelPickup, HealthPickup, Pickup, Projectile};
 use crate::game::enemy::components::Enemy;
 use crate::game::events::{
-    EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent, PlayerTransitionToRegularFormEvent,
+    ChainsawFireWave, EnemyTakeDamageEvent, GameOverEvent, PlayerTakeDamageEvent,
+    PlayerTransitionToRegularFormEvent,
 };
-use crate::game::GameInfo;
-use crate::game::{CHAINSAW_FUEL_DRAIN_SPEED, FUEL_PICKUP_RESTORE, HEALTH_PICKUP_RESTORE};
+use crate::game::{GameInfo, MAX_DEPTH, PLAYER_FALLING_SPEED};
+use crate::game::{FUEL_PICKUP_RESTORE, HEALTH_PICKUP_RESTORE};
 
 use bevy::prelude::*;
 use bevy::sprite::collide_aabb::*;
@@ -37,7 +42,7 @@ pub fn spawn_player(
         Player {
             current_speed: PLAYER_REGULAR_SPEED,
             collider: Collider {
-                size: PLAYER_COLLIDER_SIZE,
+                size: PLAYER_REGULAR_COLLIDER_SIZE,
             },
         },
     ));
@@ -60,10 +65,10 @@ pub fn transition_to_player_chainsaw_state(
             && mouse_input.just_pressed(MouseButton::Left)
         {
             next_player_state.set(PlayerState::CHAINSAW);
-            *player_texture = asset_server.load("sprites/chainsaw_form.png");
             player.current_speed = PLAYER_CHAINSAW_SPEED;
 
-            println!("Entered chainsaw mode!");
+            *player_texture = asset_server.load("sprites/player_chainsaw.png");
+            player.collider.size = PLAYER_CHAINSAW_COLLIDER_SIZE;
         }
     }
 }
@@ -71,18 +76,24 @@ pub fn transition_to_player_chainsaw_state(
 // TODO: plays the animation, sound and shader.
 pub fn transition_to_player_regular_state(
     mut next_player_state: ResMut<NextState<PlayerState>>,
-    mut player_query: Query<(&mut Handle<Image>, &mut Player)>,
+    mut player_query: Query<(&mut Handle<Image>, &mut Sprite, &mut Player)>,
     mut player_transition_to_regular_form_event_reader: EventReader<
         PlayerTransitionToRegularFormEvent,
     >,
+    mut player_info: ResMut<PlayerInfo>,
     asset_server: Res<AssetServer>,
 ) {
     for _ in player_transition_to_regular_form_event_reader.iter() {
-        if let Ok((mut player_texture, mut player)) = player_query.get_single_mut() {
-            next_player_state.set(PlayerState::REGULAR);
-            *player_texture = asset_server.load("sprites/player_falling.png");
+        if let Ok((mut player_texture, mut player_sprite, mut player)) =
+            player_query.get_single_mut()
+        {
+            next_player_state.set(PlayerState::DAMAGED);
             player.current_speed = PLAYER_REGULAR_SPEED;
-            println!("Returned back to regular form!");
+            player_info.chainsaw_heat = 0.0;
+            player_sprite.color = Color::WHITE;
+
+            *player_texture = asset_server.load("sprites/player_falling.png");
+            player.collider.size = PLAYER_REGULAR_COLLIDER_SIZE;
         }
     }
 }
@@ -105,7 +116,7 @@ pub fn drain_fuel(
 // Player will slowly gain fuel over time in regular state
 pub fn gain_fuel_over_time(mut player_info: ResMut<PlayerInfo>, time: Res<Time>) {
     let fuel_gain_amount =
-        CONSTANT_PLAYER_FUEL_GAIN_AMOUNT * CONSTANT_PLAYER_FUEL_GAIN_SPEED * time.delta_seconds();
+        PASSIVE_PLAYER_FUEL_GAIN_AMOUNT * PASSIVE_PLAYER_FUEL_GAIN_SPEED * time.delta_seconds();
     change_player_fuel(&mut player_info, fuel_gain_amount);
 }
 
@@ -156,6 +167,9 @@ pub fn check_player_pickup_collision(
     }
 }
 
+// While colliding with enemy, chainsaw will gradually overheat
+// When the player will turn completely orange, the fire wave will be released
+// Setting all the enemies on fire
 pub fn check_player_enemy_collision(
     mut player_take_damage_event_writer: EventWriter<PlayerTakeDamageEvent>,
     mut enemy_take_damage_event_writer: EventWriter<EnemyTakeDamageEvent>,
@@ -192,7 +206,72 @@ pub fn check_player_enemy_collision(
     }
 }
 
-// TODO: fix 'glitchy' movement
+pub fn check_player_projectile_collision(
+    mut player_take_damage_event_writer: EventWriter<PlayerTakeDamageEvent>,
+    mut projectiles_query: Query<(&Transform, &mut Projectile)>,
+    player_query: Query<(&Transform, &Player)>,
+    player_state: Res<State<PlayerState>>,
+) {
+    if let Ok((player_transform, player_struct)) = player_query.get_single() {
+        for (projectile_transform, mut projectile_struct) in projectiles_query.iter_mut() {
+            // If collided with projectile
+            if let Some(_) = collide(
+                player_transform.translation,
+                player_struct.collider.size,
+                projectile_transform.translation,
+                projectile_struct.collider.size,
+            ) {
+                // Check in which state player is
+                match player_state.0 {
+                    PlayerState::REGULAR => {
+                        player_take_damage_event_writer.send(PlayerTakeDamageEvent {});
+                        return;
+                    }
+                    // If the player already took damage
+                    PlayerState::DAMAGED => {
+                        continue;
+                    }
+                    // Send projectiles backwards
+                    PlayerState::CHAINSAW => {
+                        projectile_struct.direction *= -1.;
+                        continue;
+                    }
+                };
+            }
+        }
+    }
+}
+
+// Executes when enemy takes damage
+pub fn manage_chainsaw_overheat(
+    mut enemy_take_damage_event_reader: EventReader<EnemyTakeDamageEvent>,
+    mut fire_wave_event_writer: EventWriter<ChainsawFireWave>,
+    mut player_info: ResMut<PlayerInfo>,
+    mut player_query: Query<&mut Sprite, With<Player>>,
+    time: Res<Time>,
+) {
+    if let Ok(mut player_sprite) = player_query.get_single_mut() {
+        for _ in enemy_take_damage_event_reader.iter() {
+            player_info.chainsaw_heat += CHAINSAW_HEAT_SPEED * time.delta_seconds();
+            // println!("Chainsaw heat: {}", player_info.chainsaw_heat);
+
+            // Gradually turn orange
+            player_sprite.color = Color::rgb(
+                player_sprite.color.r(),
+                player_sprite.color.g() - 0.01 * CHAINSAW_HEAT_SPEED * time.delta_seconds(),
+                player_sprite.color.b(),
+            );
+
+            if player_info.chainsaw_heat >= CHAINSAW_HEAT_LIMIT {
+                fire_wave_event_writer.send(ChainsawFireWave {});
+                player_info.chainsaw_heat = 0.0;
+                player_sprite.color = Color::WHITE;
+                return;
+            }
+        }
+    }
+}
+
 pub fn move_player(
     mut player_query: Query<(&mut Transform, &Player)>,
     game_info: Res<GameInfo>,
@@ -207,6 +286,16 @@ pub fn move_player(
             player_transform.translation += direction * player.current_speed * time.delta_seconds();
         }
     }
+}
+
+pub fn update_player_progress(mut game_info: ResMut<GameInfo>, time: Res<Time>) {
+    if game_info.player_progress >= MAX_DEPTH {
+        println!("Player has reached maximum depth!");
+        return;
+    }
+
+    game_info.player_progress += PLAYER_FALLING_SPEED * time.delta_seconds();
+    println!("Current depth: {}", game_info.player_progress);
 }
 
 pub fn limit_player_movement(

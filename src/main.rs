@@ -6,10 +6,7 @@ use game::{GamePlugin, GameState};
 use particle_system::ParticleSystemPlugin;
 use ui::UIPlugin;
 
-use bevy::{
-    prelude::*,
-    window::{PresentMode, WindowMode},
-};
+use bevy::{prelude::*, window::PresentMode};
 
 fn main() {
     App::new()

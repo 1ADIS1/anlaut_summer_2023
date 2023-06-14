@@ -1,14 +1,13 @@
 use super::components::*;
 use super::resources::EnemySpawnTimer;
-use super::{ENEMY_COUNTER_ATTACK_HEAL, ENEMY_COUNTER_STATE_HEALTH, ENEMY_MAX_HEALTH, ENEMY_SPEED};
-use crate::game::components::Collider;
-use crate::game::enemy::ENEMY_COLLIDER_SIZE;
-use crate::game::events::{EnemyCounterAttackEvent, EnemyTakeDamageEvent};
+use super::*;
+use crate::game::components::{Collider, Projectile};
+use crate::game::events::{ChainsawFireWave, EnemyTakeDamageEvent};
 use crate::game::player::components::Player;
 use crate::game::player::{
     PlayerState, CHAINSAW_ENEMY_SLOW_DOWN_FACTOR, PLAYER_DAMAGE, PLAYER_DAMAGE_SPEED,
 };
-use crate::game::{GameState, COUNTER_ATTACK_MICE_NUMBER};
+use crate::game::{GameInfo, MAX_ENEMIES_NUM};
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -18,52 +17,136 @@ use rand::prelude::*;
 
 // Spawn enemies outside the bottom border of the screen
 // And set them random direction in direction from the bottom to the arena.
-pub fn spawn_enemies_over_timer(
+pub fn spawn_enemies_over_time(
     mut commands: Commands,
+    mut game_info: ResMut<GameInfo>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     asset_server: Res<AssetServer>,
     enemy_timer: Res<EnemySpawnTimer>,
 ) {
     if enemy_timer.timer.just_finished() {
+        if game_info.enemies_num >= MAX_ENEMIES_NUM {
+            return;
+        }
+
         let primary_window = window_query.get_single().unwrap();
 
-        let enemy_starting_position = Vec3::new(
-            random::<f32>() * (primary_window.width() - ENEMY_COLLIDER_SIZE.x),
-            0.0 - ENEMY_COLLIDER_SIZE.y,
-            0.0,
-        );
-        let enemy_destination = Vec3::new(
-            random::<f32>() * (primary_window.width() - ENEMY_COLLIDER_SIZE.x),
-            0.0 + ENEMY_COLLIDER_SIZE.y + random::<f32>() * ENEMY_COLLIDER_SIZE.y,
-            0.0,
-        );
-        let enemy_direction = (enemy_destination - enemy_starting_position).normalize();
+        let mut rng = thread_rng();
 
-        // TODO: Spawn different enemies
-        commands.spawn((
-            SpriteBundle {
-                transform: Transform::from_translation(enemy_starting_position),
-                texture: asset_server.load("sprites/enemy.png"),
-                ..default()
-            },
-            Enemy {
-                max_hp: ENEMY_MAX_HEALTH,
-                current_hp: ENEMY_MAX_HEALTH,
-                collider: Collider {
-                    size: ENEMY_COLLIDER_SIZE,
+        let player_progress = game_info.player_progress;
+        game_info.enemies_num += 1;
+        game_info
+            .enemies_spawn_queue
+            .push_back(if player_progress >= SHOOTER_DEPTH_LEVEL {
+                if rng.gen::<f32>() > 0.4 {
+                    EnemyType::Shooter
+                } else {
+                    EnemyType::Follower
+                }
+            } else {
+                EnemyType::Follower
+            });
+
+        // === Shooter ===
+        if game_info.enemies_spawn_queue.front().unwrap() == &EnemyType::Shooter {
+            let speed: f32 = rng.gen_range(ENEMY_RANGE_SPEED) * SHOOTER_MOVEMENT_SPEED;
+
+            let enemy_starting_position = Vec3::new(
+                rng.gen::<f32>() * (primary_window.width() - SHOOTER_COLLIDER_SIZE.x),
+                0.0 - SHOOTER_COLLIDER_SIZE.y,
+                0.0,
+            );
+            let enemy_destination = Vec3::new(
+                rng.gen::<f32>() * (primary_window.width() - SHOOTER_COLLIDER_SIZE.x),
+                0.0 + SHOOTER_COLLIDER_SIZE.y + rng.gen::<f32>() * SHOOTER_COLLIDER_SIZE.y,
+                0.0,
+            );
+            let enemy_direction = (enemy_destination - enemy_starting_position).normalize();
+
+            commands.spawn((
+                SpriteBundle {
+                    transform: Transform::from_translation(enemy_starting_position),
+                    texture: asset_server.load("sprites/shooter_default.png"),
+                    ..default()
                 },
-                counter_state_health_threshold: ENEMY_COUNTER_STATE_HEALTH,
-                enemy_counter_attack_heal: ENEMY_COUNTER_ATTACK_HEAL,
-                speed: ENEMY_SPEED,
-                state: EnemyState::Spawned,
-                direction: enemy_direction,
-                destination: enemy_destination,
-                destination_reached: false,
-            },
-            FollowAI {},
-        ));
+                Enemy {
+                    max_hp: SHOOTER_HEALTH,
+                    current_hp: SHOOTER_HEALTH,
 
-        println!("Enemy has spawned, destination: {}!", enemy_destination);
+                    current_speed: speed,
+                    default_speed: speed,
+
+                    enemy_type: EnemyType::Shooter,
+                    depth_level: SHOOTER_DEPTH_LEVEL,
+
+                    collider: Collider {
+                        size: SHOOTER_COLLIDER_SIZE,
+                    },
+                    state: EnemyState::Spawned,
+
+                    direction: enemy_direction,
+                    destination: enemy_destination,
+
+                    destination_reached: false,
+                    is_green_decreasing: false,
+                },
+                FireTimer::default(),
+                ShooterAI {
+                    reload_speed: SHOOTER_RELOAD_SPEED,
+                    max_distance_from_player: SHOOTER_DISTANCE_FROM_PLAYER,
+                    reload_timer: Timer::from_seconds(SHOOTER_RELOAD_SPEED, TimerMode::Once),
+                },
+            ));
+        }
+        // === Follower ===
+        else if game_info.enemies_spawn_queue.front().unwrap() == &EnemyType::Follower {
+            let speed: f32 = rng.gen_range(ENEMY_RANGE_SPEED) * FOLLOWER_MOVEMENT_SPEED;
+
+            let enemy_starting_position = Vec3::new(
+                rng.gen::<f32>() * (primary_window.width() - FOLLOWER_COLLIDER_SIZE.x),
+                0.0 - FOLLOWER_COLLIDER_SIZE.y,
+                0.0,
+            );
+            let enemy_destination = Vec3::new(
+                rng.gen::<f32>() * (primary_window.width() - FOLLOWER_COLLIDER_SIZE.x),
+                0.0 + FOLLOWER_COLLIDER_SIZE.y + rng.gen::<f32>() * FOLLOWER_COLLIDER_SIZE.y,
+                0.0,
+            );
+            let enemy_direction = (enemy_destination - enemy_starting_position).normalize();
+
+            commands.spawn((
+                SpriteBundle {
+                    transform: Transform::from_translation(enemy_starting_position),
+                    texture: asset_server.load("sprites/follower_default.png"),
+                    ..default()
+                },
+                Enemy {
+                    max_hp: FOLLOWER_HEALTH,
+                    current_hp: FOLLOWER_HEALTH,
+
+                    current_speed: speed,
+                    default_speed: speed,
+
+                    enemy_type: EnemyType::Follower,
+                    depth_level: FOLLOWER_DEPTH_LEVEL,
+
+                    collider: Collider {
+                        size: FOLLOWER_COLLIDER_SIZE,
+                    },
+                    state: EnemyState::Spawned,
+
+                    direction: enemy_direction,
+                    destination: enemy_destination,
+
+                    destination_reached: false,
+                    is_green_decreasing: false,
+                },
+                FireTimer::default(),
+                FollowAI {},
+            ));
+        }
+
+        game_info.enemies_spawn_queue.pop_front();
     }
 }
 
@@ -73,38 +156,69 @@ pub fn spawn_enemies_over_timer(
 // When they reach destination, set destination_reached to true.
 pub fn move_enemies_to_destination(
     mut enemies_query: Query<(&mut Transform, &mut Enemy)>,
+    player_state: Res<State<PlayerState>>,
     time: Res<Time>,
 ) {
-    for (mut enemy_transform, mut enemy) in enemies_query.iter_mut() {
-        if enemy.destination_reached && enemy.state == EnemyState::Spawned {
-            enemy.state = EnemyState::Engaging;
+    for (mut enemy_transform, mut enemy_struct) in enemies_query.iter_mut() {
+        if enemy_struct.destination_reached && enemy_struct.state == EnemyState::Spawned {
+            enemy_struct.state = EnemyState::Engaging;
         }
 
-        if enemy_transform.translation.distance(enemy.destination) > 1.0 {
-            enemy.destination_reached = false;
-            enemy_transform.translation += enemy.direction * time.delta_seconds() * enemy.speed;
+        if enemy_struct.state == EnemyState::OnFire {
+            enemy_struct.destination_reached = false;
+            enemy_transform.translation +=
+                enemy_struct.direction * time.delta_seconds() * enemy_struct.current_speed;
+            continue;
+        }
+
+        if enemy_struct.enemy_type == EnemyType::Follower && player_state.0 == PlayerState::CHAINSAW
+        {
+            enemy_struct.direction =
+                (enemy_transform.translation - enemy_struct.destination).normalize();
         } else {
-            enemy.destination_reached = true;
+            enemy_struct.direction =
+                (enemy_struct.destination - enemy_transform.translation).normalize();
+        }
+
+        if enemy_transform
+            .translation
+            .distance(enemy_struct.destination)
+            > 1.0
+        {
+            enemy_struct.destination_reached = false;
+            enemy_transform.translation +=
+                enemy_struct.direction * time.delta_seconds() * enemy_struct.current_speed;
+        } else {
+            enemy_struct.destination_reached = true;
         }
     }
 }
 
-// Prevents enemies from going outside of the window in the Engagement state.
-pub fn limit_enemy_movement_in_engaging_state(
-    mut enemies_query: Query<(&mut Transform, &Enemy)>,
+// Prevents enemies from going outside of the window in the engagement or on fire states
+pub fn limit_enemy_movement(
+    mut enemies_query: Query<(&mut Transform, &mut Enemy)>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
     let primary_window = window_query.get_single().unwrap();
 
-    for (mut enemy_transform, enemy) in enemies_query.iter_mut() {
-        if enemy.state != EnemyState::Engaging {
-            return;
+    for (mut enemy_transform, mut enemy_struct) in enemies_query.iter_mut() {
+        if enemy_struct.state == EnemyState::Spawned {
+            continue;
         }
 
-        let min_x = 0.0 + enemy.collider.size.x;
-        let max_x = primary_window.width() - enemy.collider.size.x;
-        let min_y = 0.0 + enemy.collider.size.y;
-        let max_y = primary_window.height() - enemy.collider.size.y;
+        let min_x = 0.0 + enemy_struct.collider.size.x;
+        let max_x = primary_window.width() - enemy_struct.collider.size.x;
+        let min_y = 0.0 + enemy_struct.collider.size.y;
+        let max_y = primary_window.height() - enemy_struct.collider.size.y;
+
+        if enemy_struct.state == EnemyState::OnFire {
+            if enemy_transform.translation.x < min_x || enemy_transform.translation.x > max_x {
+                enemy_struct.direction.x *= -1.0;
+            }
+            if enemy_transform.translation.y < min_y || enemy_transform.translation.y > max_y {
+                enemy_struct.direction.y *= -1.0;
+            }
+        }
 
         if enemy_transform.translation.x < min_x {
             enemy_transform.translation.x = min_x;
@@ -129,14 +243,67 @@ pub fn follow_player(
     player_state: Res<State<PlayerState>>,
 ) {
     if let Ok(player_transform) = player_query.get_single() {
-        for (enemy_transform, mut enemy) in enemies_query.iter_mut() {
-            if enemy.state == EnemyState::Engaging {
-                enemy.destination = player_transform.translation;
-                enemy.direction = if player_state.0 == PlayerState::CHAINSAW {
-                    (enemy_transform.translation - player_transform.translation).normalize()
-                } else {
-                    (player_transform.translation - enemy_transform.translation).normalize()
-                };
+        for (enemy_transform, mut enemy_struct) in enemies_query.iter_mut() {
+            if enemy_struct.state != EnemyState::Engaging {
+                continue;
+            }
+
+            enemy_struct.destination = player_transform.translation;
+            // enemy_struct.direction = if player_state.0 == PlayerState::CHAINSAW {
+            //     (enemy_transform.translation - player_transform.translation).normalize()
+            // } else {
+            //     (player_transform.translation - enemy_transform.translation).normalize()
+            // };
+        }
+    }
+}
+
+pub fn handle_shooter_ai(
+    mut commands: Commands,
+    mut enemies_query: Query<(&Transform, &mut Enemy, &mut ShooterAI)>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    player_query: Query<&Transform, With<Player>>,
+    asset_server: Res<AssetServer>,
+) {
+    let primary_window = window_query.get_single().unwrap();
+
+    if let Ok(player_transform) = player_query.get_single() {
+        for (enemy_transform, mut enemy_struct, mut shooter_struct) in enemies_query.iter_mut() {
+            if enemy_struct.state != EnemyState::Engaging {
+                continue;
+            }
+
+            let max_x = primary_window.width() - enemy_struct.collider.size.x;
+            let max_y = primary_window.height() - enemy_struct.collider.size.y;
+
+            if enemy_struct.destination_reached {
+                enemy_struct.destination =
+                    Vec3::new(random::<f32>() * max_x, random::<f32>() * max_y, 0.0);
+            }
+
+            // shoot projectile
+            if shooter_struct.reload_timer.just_finished() {
+                commands.spawn((
+                    SpriteBundle {
+                        transform: Transform::from_translation(enemy_transform.translation),
+                        texture: asset_server.load("sprites/projectile.png"),
+                        sprite: Sprite {
+                            custom_size: Some(SHOOTER_PROJECTILE_SIZE),
+                            ..default()
+                        },
+                        ..default()
+                    },
+                    Projectile {
+                        speed: SHOOTER_PROJECTILE_SPEED,
+                        direction: (player_transform.translation - enemy_transform.translation)
+                            .normalize(),
+                        collider: Collider {
+                            size: SHOOTER_PROJECTILE_COLLIDER_SIZE,
+                        },
+                    },
+                ));
+
+                shooter_struct.reload_timer.reset();
             }
         }
     }
@@ -145,9 +312,8 @@ pub fn follow_player(
 pub fn handle_enemy_take_damage_event(
     mut commands: Commands,
     mut enemy_take_damage_event_reader: EventReader<EnemyTakeDamageEvent>,
-    mut enemy_counter_attack_event_writer: EventWriter<EnemyCounterAttackEvent>,
     mut enemies_query: Query<&mut Enemy>,
-    mut next_game_state: ResMut<NextState<GameState>>,
+    mut game_info: ResMut<GameInfo>,
     time: Res<Time>,
 ) {
     for enemy_damage_event in enemy_take_damage_event_reader.iter() {
@@ -156,45 +322,119 @@ pub fn handle_enemy_take_damage_event(
         if let Ok(mut enemy_struct) = enemies_query.get_mut(enemy_damage_event.enemy_entity) {
             if enemy_struct.current_hp <= 0.0 {
                 commands.entity(enemy_damage_event.enemy_entity).despawn();
-            } else if enemy_struct.current_hp <= enemy_struct.counter_state_health_threshold {
-                // Go to counter attack state
-                let counter_attack_event =
-                    create_enemy_counter_attack_event(enemy_damage_event.enemy_entity);
-                println!("Counter Attack event sent!");
-                enemy_counter_attack_event_writer.send(counter_attack_event);
-                next_game_state.set(GameState::CounterAttack);
-                return;
+
+                let enemies_num = game_info.enemies_num;
+                game_info.enemies_num = if enemies_num != 0 { enemies_num - 1 } else { 0 };
             } else {
                 // Drain enemy's hp and slow it down
                 enemy_struct.current_hp -=
                     PLAYER_DAMAGE as f32 * PLAYER_DAMAGE_SPEED * time.delta_seconds();
-                enemy_struct.speed -= time.delta_seconds() * CHAINSAW_ENEMY_SLOW_DOWN_FACTOR;
+                enemy_struct.current_speed -=
+                    time.delta_seconds() * CHAINSAW_ENEMY_SLOW_DOWN_FACTOR;
             }
         };
     }
 }
 
-pub fn create_enemy_counter_attack_event(enemy_entity: Entity) -> EnemyCounterAttackEvent {
-    let mut keys_to_press = vec![];
+// Enemy becomes ignited and changes his AI
+pub fn handle_fire_wave_event(
+    mut fire_wave_event_reader: EventReader<ChainsawFireWave>,
+    mut enemies_query: Query<(&mut Enemy, &mut FireTimer)>,
+) {
+    for _ in fire_wave_event_reader.iter() {
+        for (mut enemy_struct, mut enemy_fire_timer) in enemies_query.iter_mut() {
+            if enemy_struct.state != EnemyState::Engaging {
+                continue;
+            }
 
-    for _ in 0..COUNTER_ATTACK_MICE_NUMBER {
-        if random::<f32>() > 0.5 {
-            keys_to_press.push(MouseButton::Left);
+            enemy_struct.state = EnemyState::OnFire;
+            enemy_struct.current_speed += ENEMY_ON_FIRE_SPEED_GAIN;
+            enemy_struct.is_green_decreasing = true;
+            enemy_fire_timer.timer.reset();
+        }
+
+        return;
+    }
+}
+
+pub fn handle_on_fire_state(
+    mut enemies_query: Query<(&mut Sprite, &mut Enemy, &FireTimer)>,
+    time: Res<Time>,
+) {
+    for (mut enemy_sprite, mut enemy_struct, enemy_fire_timer) in enemies_query.iter_mut() {
+        if enemy_struct.state != EnemyState::OnFire {
+            continue;
+        }
+
+        if enemy_fire_timer.timer.just_finished() {
+            enemy_struct.state = EnemyState::Engaging;
+            enemy_struct.current_speed -= ENEMY_ON_FIRE_SPEED_GAIN;
+            enemy_sprite.color = Color::WHITE;
+            enemy_struct.is_green_decreasing = false;
+            enemy_struct.destination_reached = false;
+
+            println!("Enemy has extinguished the fire");
+            continue;
+        }
+
+        // Periodical orange flash
+        let mut enemy_color = enemy_sprite.color;
+
+        if enemy_color.g() * 255.0 >= FIRE_FLASH_GREEN_MAX {
+            enemy_struct.is_green_decreasing = true;
+        } else if enemy_color.g() * 255.0 <= FIRE_FLASH_GREEN_MIN {
+            enemy_struct.is_green_decreasing = false;
+        }
+
+        if enemy_struct.is_green_decreasing {
+            enemy_color = Color::rgb_linear(
+                enemy_color.r(),
+                enemy_color.g() - FIRE_COLOR_SPEED * time.delta_seconds(),
+                enemy_color.b() - FIRE_COLOR_SPEED * time.delta_seconds(),
+            );
+
+            println!("Enemy's color is decreasing");
         } else {
-            keys_to_press.push(MouseButton::Right);
+            enemy_color = Color::rgb_linear(
+                enemy_color.r(),
+                enemy_color.g() + FIRE_COLOR_SPEED * time.delta_seconds(),
+                enemy_color.b() + FIRE_COLOR_SPEED * time.delta_seconds(),
+            );
+
+            println!("Enemy's color is increasing");
+        }
+
+        enemy_sprite.color = enemy_color;
+    }
+}
+
+pub fn tick_enemy_spawn_timer(time: Res<Time>, mut enemy_spawn_timer: ResMut<EnemySpawnTimer>) {
+    enemy_spawn_timer.timer.tick(time.delta());
+}
+
+// Tick the timer only when the enemy is on fire
+pub fn tick_enemy_fire_timer(mut enemy_queries: Query<(&mut FireTimer, &Enemy)>, time: Res<Time>) {
+    for (mut enemy_fire_timer, enemy_struct) in enemy_queries.iter_mut() {
+        if enemy_struct.state == EnemyState::OnFire {
+            enemy_fire_timer.timer.tick(time.delta());
         }
     }
+}
 
-    EnemyCounterAttackEvent {
-        enemy_entity,
-        keys_to_press,
+pub fn tick_shooter_reloading_timer(
+    mut enemy_queries: Query<(&mut ShooterAI, &Enemy)>,
+    time: Res<Time>,
+) {
+    for (mut shooter_struct, enemy_struct) in enemy_queries.iter_mut() {
+        if enemy_struct.state != EnemyState::Engaging {
+            continue;
+        }
+
+        shooter_struct.reload_timer.tick(time.delta());
     }
 }
 
-pub fn tick_enemy_spawn_timer(time: Res<Time>, mut enemy_timer: ResMut<EnemySpawnTimer>) {
-    enemy_timer.timer.tick(time.delta());
-}
-
+#[allow(dead_code)]
 pub fn change_enemy_health(enemy_struct: &mut Enemy, amount: f32) {
     enemy_struct.current_hp = if enemy_struct.current_hp + amount > enemy_struct.max_hp {
         enemy_struct.max_hp

@@ -1,12 +1,8 @@
-use crate::game::player::systems::change_player_fuel;
-
 use super::components::*;
-use super::enemy::components::Enemy;
-use super::enemy::systems::change_enemy_health;
 use super::events::*;
 use super::player::components::Player;
-use super::player::resources::PlayerInfo;
-use super::CounterAttackTimer;
+use super::BACKGROUND_LIGHTNESS;
+use super::HEALTH_SPAWN_CHANCE;
 use super::{GameInfo, GameState, PickupSpawnTimer};
 use super::{
     FUEL_PICKUP_COLLIDER_SIZE, FUEL_PICKUP_SPRITE_SIZE, HEALTH_PICKUP_COLLIDER_SIZE,
@@ -36,6 +32,12 @@ pub fn spawn_parallax_background(
             ),
             texture: asset_server.load("sprites/bg1.png"),
             sprite: Sprite {
+                color: Color::Hsla {
+                    hue: 360.,
+                    saturation: 0.,
+                    lightness: BACKGROUND_LIGHTNESS,
+                    alpha: 1.,
+                },
                 custom_size: Some(bg_size),
                 ..default()
             },
@@ -54,6 +56,12 @@ pub fn spawn_parallax_background(
             ),
             texture: asset_server.load("sprites/bg2.png"),
             sprite: Sprite {
+                color: Color::Hsla {
+                    hue: 360.,
+                    saturation: 0.,
+                    lightness: BACKGROUND_LIGHTNESS,
+                    alpha: 1.,
+                },
                 custom_size: Some(bg_size),
                 ..default()
             },
@@ -86,6 +94,33 @@ pub fn move_parallax_background(
     }
 }
 
+pub fn handle_projectiles(
+    mut commands: Commands,
+    mut projectiles_query: Query<(Entity, &mut Transform, &Projectile)>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    time: Res<Time>,
+) {
+    let primary_window = window_query.get_single().unwrap();
+
+    for (entity, mut projectile_transform, projectile_struct) in projectiles_query.iter_mut() {
+        let min_x = 0.0 + projectile_struct.collider.size.x;
+        let max_x = primary_window.width() - projectile_struct.collider.size.x;
+        let min_y = 0.0 + projectile_struct.collider.size.y;
+        let max_y = primary_window.height() - projectile_struct.collider.size.y;
+
+        projectile_transform.translation +=
+            projectile_struct.direction * projectile_struct.speed * time.delta_seconds();
+
+        if projectile_transform.translation.x < min_x
+            || projectile_transform.translation.x > max_x
+            || projectile_transform.translation.y < min_y
+            || projectile_transform.translation.y > max_y
+        {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 pub fn spawn_camera(mut commands: Commands, window_query: Query<&Window, With<PrimaryWindow>>) {
     let primary_window = window_query.get_single().unwrap();
 
@@ -102,7 +137,7 @@ pub fn spawn_camera(mut commands: Commands, window_query: Query<&Window, With<Pr
     // ));
 
     commands.spawn({
-        let mut bundle = (
+        let bundle = (
             Camera2dBundle {
                 transform: Transform::from_xyz(
                     primary_window.width() / 2.0,
@@ -114,7 +149,7 @@ pub fn spawn_camera(mut commands: Commands, window_query: Query<&Window, With<Pr
             MainCamera {},
         );
         // bundle.0.projection.scaling_mode =
-        // bevy::render::camera::ScalingMode::FixedHorizontal(260.0);
+        //     bevy::render::camera::ScalingMode::FixedHorizontal(260.0);
         // bundle.0.projection.scaling_mode = bevy::render::camera::ScalingMode::WindowSize(1.0);
         // bundle.0.transform.scale = Vec3::new(1., 1., 1.);
         bundle
@@ -131,9 +166,9 @@ pub fn spawn_pickups_over_time(
     let primary_window = window_query.get_single().unwrap();
 
     if pickup_timer.timer.just_finished() {
-        if random::<f32>() > 0.5 {
-            spawn_fuel_bundle(&mut commands, &asset_server, primary_window);
-        } else {
+        spawn_fuel_bundle(&mut commands, &asset_server, primary_window);
+
+        if random::<f32>() > HEALTH_SPAWN_CHANCE {
             spawn_health_bundle(&mut commands, &asset_server, primary_window);
         }
     }
@@ -217,6 +252,9 @@ pub fn despawn_pickups(
     }
 }
 
+// Play fire shader
+// pub fn handle_firewave_event() {}
+
 // Despawn player upon game over and transition to game over state
 pub fn handle_game_over_event(
     mut commands: Commands,
@@ -252,136 +290,6 @@ pub fn get_cursor_world_coordinates(
     }
 }
 
-pub fn handle_counter_attack_event(
-    mut enemy_counter_attack_event_reader: EventReader<EnemyCounterAttackEvent>,
-    mut game_info: ResMut<GameInfo>,
-) {
-    for counter_attack_event in enemy_counter_attack_event_reader.iter() {
-        game_info.counter_attack_event = counter_attack_event.clone();
-        return;
-    }
-}
-
-pub fn handle_counter_attack_state(
-    mut game_info: ResMut<GameInfo>,
-    mut counter_attack_event_failed_writer: EventWriter<CounterAttackFailed>,
-    mut counter_attack_event_succeeded_writer: EventWriter<CounterAttackSucceeded>,
-    counter_attack_timer: Res<CounterAttackTimer>,
-    mouse_input: Res<Input<MouseButton>>,
-) {
-    if counter_attack_timer.timer.just_finished() {
-        println!("Counter attack time has run out!");
-
-        counter_attack_event_failed_writer.send(CounterAttackFailed {
-            enemy_entity: game_info.counter_attack_event.enemy_entity,
-        });
-    }
-
-    // Checks if incorrect button was pressed
-    for mouse_button in vec![MouseButton::Left, MouseButton::Right] {
-        if mouse_button != game_info.counter_attack_event.keys_to_press[0]
-            && mouse_input.just_pressed(mouse_button)
-        {
-            counter_attack_event_failed_writer.send(CounterAttackFailed {
-                enemy_entity: game_info.counter_attack_event.enemy_entity,
-            });
-        }
-    }
-
-    if mouse_input.just_pressed(game_info.counter_attack_event.keys_to_press[0]) {
-        println!("One key pressed successfully!");
-        game_info.counter_attack_event.keys_to_press.remove(0);
-
-        if game_info.counter_attack_event.keys_to_press.is_empty() {
-            println!("Counter attack passed successfully!");
-            counter_attack_event_succeeded_writer.send(CounterAttackSucceeded {
-                enemy_entity: game_info.counter_attack_event.enemy_entity,
-            });
-        }
-    }
-}
-
-// If the player passes the counter attack:
-// 1. Player kills enemy
-// 2. Player gains some fuel
-pub fn handle_counter_attack_succeeded_event(
-    mut commands: Commands,
-    mut counter_attack_event_succeeded_reader: EventReader<CounterAttackSucceeded>,
-    mut next_game_state: ResMut<NextState<GameState>>,
-    mut counter_attack_timer: ResMut<CounterAttackTimer>,
-    mut player_info: ResMut<PlayerInfo>,
-) {
-    for counter_attack_succeeded_event in counter_attack_event_succeeded_reader.iter() {
-        // Change state
-        next_game_state.set(GameState::Running);
-
-        // Reset timer
-        counter_attack_timer.timer.reset();
-
-        // despawn enemy
-        commands
-            .entity(counter_attack_succeeded_event.enemy_entity)
-            .despawn();
-
-        // Give player fuel
-        let fuel_gain_amount = player_info.counter_attack_fuel_gain;
-        change_player_fuel(&mut player_info, fuel_gain_amount);
-
-        return;
-    }
-}
-
-// 1. Player leaves the chainsaw mode
-// 2. Player looses some fuel
-// 3. Player takes damage
-// 4. Enemy heals for some hp
-pub fn handle_counter_attack_failed_event(
-    mut counter_attack_event_failed_reader: EventReader<CounterAttackFailed>,
-    mut next_game_state: ResMut<NextState<GameState>>,
-    mut counter_attack_timer: ResMut<CounterAttackTimer>,
-    mut enemies_query: Query<&mut Enemy>,
-    mut player_info: ResMut<PlayerInfo>,
-    mut player_take_damage_event_writer: EventWriter<PlayerTakeDamageEvent>,
-    mut player_transition_to_regular_form_event_writer: EventWriter<
-        PlayerTransitionToRegularFormEvent,
-    >,
-) {
-    for failed_counter_attack_event in counter_attack_event_failed_reader.iter() {
-        println!("Counter attack has failed!");
-
-        // Change state
-        next_game_state.set(GameState::Running);
-
-        // Send player transition and damage events
-        player_transition_to_regular_form_event_writer.send(PlayerTransitionToRegularFormEvent {});
-        player_take_damage_event_writer.send(PlayerTakeDamageEvent {});
-
-        // Reset timer
-        counter_attack_timer.timer.reset();
-
-        // Player looses fuel
-        let fuel_loss_amount = player_info.counter_attack_fuel_loss;
-        change_player_fuel(&mut player_info, fuel_loss_amount);
-
-        // Heal enemy
-        if let Ok(mut enemy_struct) =
-            enemies_query.get_mut(failed_counter_attack_event.enemy_entity)
-        {
-            let heal_amount = enemy_struct.enemy_counter_attack_heal;
-            change_enemy_health(&mut enemy_struct, heal_amount);
-        }
-
-        return;
-    }
-}
-
 pub fn tick_pickup_spawn_timer(time: Res<Time>, mut pickup_timer: ResMut<PickupSpawnTimer>) {
     pickup_timer.timer.tick(time.delta());
-}
-
-pub fn tick_counter_attack_timer(
-    mut counter_attack_timer: ResMut<CounterAttackTimer>,
-    time: Res<Time>,
-) {
-    counter_attack_timer.timer.tick(time.delta());
 }
